@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Semantic Discovery & Taxonomy Manager</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- CSS File -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="brand-logo">📊</div>
+                <div class="brand-text">
+                    <h1>SEMANTIC ENGINE</h1>
+                    <span>Data Scientist Portal</span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-menu">
+                <a href="#" class="menu-item active" data-tab="search-tab">
+                    <span class="menu-icon">🔍</span>
+                    <span class="menu-label">Hybrid Search</span>
+                </a>
+                <a href="#" class="menu-item" data-tab="predict-tab">
+                    <span class="menu-icon">📊</span>
+                    <span class="menu-label">Batch Classifier</span>
+                </a>
+                <a href="#" class="menu-item" data-tab="taxonomy-tab">
+                    <span class="menu-icon">🗄️</span>
+                    <span class="menu-label">Taxonomy CRUD</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="model-status">
+                    <div class="status-indicator online"></div>
+                    <div class="status-info">
+                        <strong>BERT-Mini Local</strong>
+                        <span>ONNX Runtime Active</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace Area -->
+        <main class="workspace">
+            <!-- Topbar Header -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <h2 class="section-title" id="page-title">Hybrid Retrieval & Search Engine</h2>
+                    <p class="section-desc" id="page-desc">Pencarian semantik berkepadatan tinggi (Dense BERT) dikawinkan dengan BM25 leksikal persis.</p>
+                </div>
+                
+                <div class="topbar-right">
+                    <!-- Database Skenario Switcher -->
+                    <div class="db-switcher-container">
+                        <span class="switcher-label">DATABASE ACTIVE</span>
+                        <div class="switcher-buttons">
+                            <button id="btn-db-utama" class="switcher-btn active" onclick="switchDatabase('utama')">
+                                UTAMA
+                            </button>
+                            <button id="btn-db-demo" class="switcher-btn" onclick="switchDatabase('demo_real')">
+                                DEMO REAL
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Workspace Container -->
+            <div class="workspace-content">
+                
+                <!-- TAB 1: HYBRID SEARCH -->
+                <div class="tab-pane active" id="search-tab">
+                    <!-- Search Control Card -->
+                    <div class="dashboard-card main-search-card">
+                        <div class="search-input-group">
+                            <span class="search-icon-inside">🔍</span>
+                            <input type="text" id="inp-search-query" placeholder="Ketik kueri pencarian semantik (misal: 'transkrip rian hidayat' atau 'jurnal sinta 2 nlp')..." onkeydown="if(event.key === 'Enter') executeSearch()">
+                            <button class="btn-primary" onclick="executeSearch()">DISCOVER</button>
+                        </div>
+
+                        <!-- Hybrid Tuning Panel -->
+                        <div class="tuning-panel">
+                            <div class="tuning-label">
+                                <strong>HYBRID FUSION COEFFICIENT (Alpha Value)</strong>
+                                <span id="val-alpha-display">0.70</span>
+                            </div>
+                            <div class="tuning-slider-wrapper">
+                                <span class="slider-side-label">Sparse BM25 (Leksikal)</span>
+                                <input type="range" id="slider-alpha" min="0" max="1" step="0.05" value="0.70" oninput="updateAlphaDisplay(this.value)">
+                                <span class="slider-side-label">Dense BERT (Semantik)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search Results Grid -->
+                    <div class="results-header" style="display: none;" id="results-count-bar">
+                        <h3>Ditemukan <span id="results-count" class="badge-accent">0</span> Berkas Serupa</h3>
+                    </div>
+
+                    <div class="results-grid" id="search-results-container">
+                        <!-- Empty State -->
+                        <div class="empty-state">
+                            <div class="empty-icon">📂</div>
+                            <h3>Mulai Pencarian Semantik</h3>
+                            <p>Masukkan kata kunci atau kalimat kueri di atas untuk menggali kemiripan semantik multi-layer.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: BATCH CLASSIFIER / PREDICTOR -->
+                <div class="tab-pane" id="predict-tab">
+                    <div class="grid-2-col">
+                        <!-- Input Card -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3>Dokumen Masukan (Unggah / Teks)</h3>
+                                <span class="badge">ONNX Zero-Shot</span>
+                            </div>
+                            <div class="card-body">
+                                <p class="card-body-desc">Unggah berkas fisik (XLSX, CSV, TXT) atau ketik teks untuk memicu klasifikasi semantik multi-layer.</p>
+                                
+                                <div class="file-upload-wrapper" style="margin-bottom: 16px; display: flex; gap: 12px; align-items: center;">
+                                    <input type="file" id="inp-file-upload" class="file-input" accept=".xlsx,.csv,.txt,.pdf,.docx" style="display: none;" onchange="handleFileUpload(event)">
+                                    <button class="btn-secondary" onclick="document.getElementById('inp-file-upload').click()">📁 UNGGAH BERKAS</button>
+                                    <span id="lbl-file-name" style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Belum ada berkas</span>
+                                </div>
+                                
+                                <textarea id="txt-predict-input" placeholder="Atau masukkan konten teks di sini (misal: 'Laporan pembayaran UKT mahasiswa Budi Santoso nominal Rp 5.500.000 lunas terverifikasi bank')..."></textarea>
+                                <button class="btn-primary btn-block" onclick="executePrediction()">ANALISIS STRUKTUR SEMANTIK</button>
+                            </div>
+                        </div>
+
+                        <!-- Prediction Output Card -->
+                        <div class="dashboard-card" id="prediction-output-card">
+                            <div class="card-header">
+                                <h3>Visualisasi Distribusi Keyakinan</h3>
+                                <span class="badge success">Output Logits</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="predictions-wrapper">
+                                    <!-- Best Label Banner -->
+                                    <div class="best-prediction-banner">
+                                        <div class="prediction-tier">KEPUTUSAN MULTI-LAYER UTAMA</div>
+                                        <div class="prediction-tag-group">
+                                            <span id="best-tag-l1" class="best-tag">Domain Makro</span>
+                                            <span class="tag-arrow">➔</span>
+                                            <span id="best-tag-l2" class="best-tag sub">Detail Mikro</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Layer 1 Domain List -->
+                                    <div class="prediction-list-group">
+                                        <h4>Layer 1: Domain Makro</h4>
+                                        <div class="progress-bar-list" id="prediction-bars-l1">
+                                            <!-- Dynamic entries -->
+                                        </div>
+                                    </div>
+
+                                    <!-- Layer 2 Detail List -->
+                                    <div class="prediction-list-group">
+                                        <h4>Layer 2: Detail Mikro</h4>
+                                        <div class="progress-bar-list" id="prediction-bars-l2">
+                                            <!-- Dynamic entries -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: TAXONOMY & DB CRUD -->
+                <div class="tab-pane" id="taxonomy-tab">
+                    <!-- Rice Rule Card -->
+                    <div class="dashboard-card math-card">
+                        <div class="math-formula-box">
+                            <div class="math-left">
+                                <div class="math-title">RICE RULE TAKSONOMI OPTIMAL</div>
+                                <div class="math-formula">
+                                    X = ⌈ 2 · N<sup>1/3</sup> ⌉
+                                </div>
+                            </div>
+                            <div class="math-right">
+                                <div class="stat-box">
+                                    <span class="stat-val" id="lbl-stat-docs">0</span>
+                                    <span class="stat-label">Total Berkas (N)</span>
+                                </div>
+                                <div class="stat-box">
+                                    <span class="stat-val accent" id="lbl-stat-optimal">0</span>
+                                    <span class="stat-label">Rekomendasi Label (X)</span>
+                                </div>
+                                <div class="stat-box">
+                                    <span class="stat-val success" id="lbl-stat-actual">0</span>
+                                    <span class="stat-label">Label Unik Aktif</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2-col">
+                        <!-- Left Panel: Label List -->
+                        <div class="dashboard-card list-card">
+                            <div class="card-header">
+                                <h3>Daftar Label di Database</h3>
+                                <input type="text" id="inp-filter-labels" class="inp-mini" placeholder="Saring nama label..." onkeyup="loadDatabaseLabels(this.value)">
+                            </div>
+                            <div class="card-body">
+                                <div class="label-interactive-list" id="db-labels-container">
+                                    <!-- Dynamic list items -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Panel: Controls -->
+                        <div class="dashboard-card controls-card">
+                            <div class="card-header">
+                                <h3>Panel Manipulasi Taksonomi</h3>
+                            </div>
+                            <div class="card-body">
+                                <!-- Edit/Add Section -->
+                                <div class="control-form-group">
+                                    <label>Nama Label Terpilih / Baru</label>
+                                    <input type="text" id="inp-active-label" placeholder="Pilih label dari daftar atau ketik baru...">
+                                    <input type="hidden" id="inp-old-label">
+                                    
+                                    <div class="form-row-buttons">
+                                        <button class="btn-secondary" onclick="executeEditLabel()">PERBARUI GLOBAL</button>
+                                        <button class="btn-danger" onclick="executeDeleteLabel()">HAPUS DARI ALL DOCS</button>
+                                    </div>
+                                </div>
+
+                                <div class="divider"></div>
+
+                                <!-- Add new taxonomy label -->
+                                <div class="control-form-group">
+                                    <label>Tambah Kategori Baru ke Taksonomi</label>
+                                    <div class="form-row-buttons">
+                                        <button class="btn-outline" onclick="executeAddLabel('layer_1')">+ Domain (L1)</button>
+                                        <button class="btn-outline" onclick="executeAddLabel('layer_2')">+ Detail (L2)</button>
+                                    </div>
+                                </div>
+
+                                <div class="divider"></div>
+
+                                <!-- Global Database Seed / Batch Re-label -->
+                                <div class="control-form-group">
+                                    <label>Tindakan Batch Skala Besar</label>
+                                    <div class="batch-buttons">
+                                        <button class="btn-primary btn-block btn-accent-glow" onclick="executeRegenerateLabels()">REGENERASIKAN LABEL VIA ONNX</button>
+                                        <button class="btn-secondary btn-block" onclick="executeResetDatabase()">RESET & RESEED DATABASE BARU</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Regenerating Progress Overlay -->
+    <div class="progress-overlay" id="progress-overlay-pane" style="display: none;">
+        <div class="progress-dialog">
+            <h3>Batch Regenerasi Saraf ONNX</h3>
+            <p>Sedang melabeli ulang seluruh dokumen database dengan model BERT-mini lokal...</p>
+            
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" id="progress-fill">0%</div>
+            </div>
+            <div class="progress-status-text" id="progress-status-text">Memproses: 0 / 0 Berkas</div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast">Notifikasi Sukses</div>
+
+    <!-- Javascript Assets -->
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

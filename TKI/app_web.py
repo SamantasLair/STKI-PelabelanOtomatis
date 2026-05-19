@@ -1,0 +1,612 @@
+import os
+import sys
+import sqlite3
+import json
+import numpy as np
+import pandas as pd
+import math
+import threading
+from flask import Flask, render_template, jsonify, request
+
+# Konfigurasi Path
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(CURRENT_DIR)
+ONNX_DIR = os.path.join(ROOT_DIR, "STKI", "onnx_model")
+ONNX_FILE = os.path.join(ONNX_DIR, "multi_label_model.onnx")
+DB_PATH = os.path.join(ROOT_DIR, "academic_metadata.db")
+DB_REAL_PATH = os.path.join(ROOT_DIR, "academic_demo_real.db")
+
+app = Flask(__name__, template_folder=os.path.join(CURRENT_DIR, "templates"), static_folder=os.path.join(CURRENT_DIR, "static"))
+
+# State Sistem Aktif (Default)
+active_db_path = DB_PATH
+
+# Taksonomi Dinamis (Skenario Utama vs Demo Real)
+TAXONOMY_UTAMA = {
+    "Layer_1_Domain": ["Akademik Mahasiswa", "Administrasi Dosen", "Jadwal dan SKS Perkuliahan"],
+    "Layer_2_Detail": ["Transkrip Nilai Lengkap", "KRS SKS Kelas", "Daftar Dosen Pengajar", "Laporan Keuangan", "Kurikulum Jurusan"]
+}
+
+TAXONOMY_DEMO = {
+    "Layer_1_Domain": ["Skripsi & Tugas Akhir", "Dataset & Publikasi Riset", "Jurnal & Artikel Ilmiah"],
+    "Layer_2_Detail": [
+        "Skripsi Informatika", "Skripsi Sistem Informasi", "Skripsi Teknik Komputer",
+        "Dataset Citra Medis", "Dataset Teks Indonesia", "Dataset Sensor IoT",
+        "Jurnal Sinta 1 Gold", "Jurnal Sinta 2 Silver", "Jurnal Sinta 3 Bronze",
+        "Artikel Konferensi IEEE", "Artikel Prosiding Nasional", "Laporan Pengabdian",
+        "Proposal Hibah Riset", "Monograf Buku Ajar", "Paten HAKI Terdaftar",
+        "Hak Cipta Software", "Desain Industri"
+    ]
+}
+
+TAXONOMY = {
+    "Layer_1_Domain": list(TAXONOMY_UTAMA["Layer_1_Domain"]),
+    "Layer_2_Detail": list(TAXONOMY_UTAMA["Layer_2_Detail"])
+}
+
+# Inisialisasi ONNX Engine
+import onnxruntime as ort
+from transformers import AutoTokenizer
+
+session = None
+tokenizer = None
+
+def init_onnx_engine():
+    global session, tokenizer
+    if not os.path.exists(ONNX_FILE):
+        return False
+    try:
+        session = ort.InferenceSession(ONNX_FILE, providers=['CPUExecutionProvider'])
+        tokenizer = AutoTokenizer.from_pretrained(ONNX_DIR)
+        return True
+    except Exception as e:
+        print(f"Error loading ONNX engine: {e}")
+        return False
+
+onnx_ready = init_onnx_engine()
+
+def get_onnx_embedding(text):
+    if session is None or tokenizer is None:
+        return np.zeros(5)
+    inputs = tokenizer(text, return_tensors="np", padding="max_length", truncation=True, max_length=256)
+    input_ids = inputs["input_ids"].astype(np.int64)
+    attention_mask = inputs["attention_mask"].astype(np.int64)
+    outputs = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})
+    logits = outputs[0].squeeze()
+    probs = 1.0 / (1.0 + np.exp(-logits))
+    return probs
+
+def get_cosine_similarity(v1, v2):
+    dot_product = np.dot(v1, v2)
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
+    if norm_v1 == 0 or norm_v2 == 0:
+        return 0.0
+    return float(dot_product / (norm_v1 * norm_v2))
+
+# Class BM25 untuk Leksikal Retrieval
+class BM25:
+    def __init__(self, corpus, b=0.75, k1=1.5):
+        self.b = b
+        self.k1 = k1
+        self.corpus_size = len(corpus)
+        self.avgdl = sum(len(d) for d in corpus) / self.corpus_size if self.corpus_size > 0 else 1.0
+        self.doc_freqs = []
+        self.idf = {}
+        self.doc_lens = []
+        
+        for doc in corpus:
+            words = doc.lower().split()
+            self.doc_lens.append(len(words))
+            freqs = {}
+            for w in words:
+                freqs[w] = freqs.get(w, 0) + 1
+            self.doc_freqs.append(freqs)
+            
+            for w in freqs:
+                self.idf[w] = self.idf.get(w, 0) + 1
+                
+        for w, df in self.idf.items():
+            self.idf[w] = np.log((self.corpus_size - df + 0.5) / (df + 0.5) + 1.0)
+            
+    def get_score(self, query_words, doc_idx):
+        score = 0.0
+        doc_freq = self.doc_freqs[doc_idx]
+        doc_len = self.doc_lens[doc_idx]
+        for w in query_words:
+            if w in doc_freq:
+                freq = doc_freq[w]
+                idf_val = self.idf.get(w, 0.0)
+                numerator = freq * (self.k1 + 1)
+                denominator = freq + self.k1 * (1 - self.b + self.b * (doc_len / self.avgdl))
+                score += idf_val * (numerator / denominator)
+        return score
+
+# State Thread Relabeling Ulang
+relabel_progress = {"status": "idle", "current": 0, "total": 0, "percentage": 0}
+
+def async_relabel_task(db_path, tax_layer1, tax_layer2):
+    global relabel_progress
+    try:
+        relabel_progress["status"] = "running"
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, content FROM documents")
+        rows = cursor.fetchall()
+        
+        if not rows:
+            relabel_progress["status"] = "failed"
+            conn.close()
+            return
+            
+        total = len(rows)
+        relabel_progress["total"] = total
+        
+        for idx, (doc_id, content) in enumerate(rows):
+            emb = get_onnx_embedding(content)
+            text_lower = content.lower()
+            
+            # Predict Layer 1
+            l1_raw_sims = []
+            for label in tax_layer1:
+                lbl_vector = get_onnx_embedding(label)
+                sim = get_cosine_similarity(emb, lbl_vector)
+                l1_raw_sims.append(sim)
+                
+            # Dynamic Keyword Boost
+            l1_boosts = [0.0] * len(tax_layer1)
+            for i, label in enumerate(tax_layer1):
+                if "akademik" in label.lower() or "mahasiswa" in label.lower() or "skripsi" in label.lower():
+                    if any(w in text_lower for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]):
+                        l1_boosts[i] += 0.08
+                if "dosen" in label.lower() or "dataset" in label.lower() or "riset" in label.lower():
+                    if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]):
+                        l1_boosts[i] += 0.08
+                if "sks" in label.lower() or "jadwal" in label.lower() or "jurnal" in label.lower() or "artikel" in label.lower():
+                    if any(w in text_lower for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel", "ieee"]):
+                        l1_boosts[i] += 0.08
+            
+            for i in range(len(l1_raw_sims)):
+                l1_raw_sims[i] += l1_boosts[i]
+            best_l1_label = tax_layer1[np.argmax(l1_raw_sims)]
+            
+            # Predict Layer 2
+            l2_raw_sims = []
+            for label in tax_layer2:
+                lbl_vector = get_onnx_embedding(label)
+                sim = get_cosine_similarity(emb, lbl_vector)
+                l2_raw_sims.append(sim)
+                
+            l2_boosts = [0.0] * len(tax_layer2)
+            for i, label in enumerate(tax_layer2):
+                lbl_lower = label.lower()
+                if "transkrip" in lbl_lower or "nilai" in lbl_lower:
+                    if any(w in text_lower for w in ["transkrip", "ipk", "kps"]): l2_boosts[i] += 0.08
+                elif "krs" in lbl_lower or "rencana studi" in lbl_lower:
+                    if any(w in text_lower for w in ["krs", "sks", "rencana studi"]): l2_boosts[i] += 0.08
+                elif "dosen" in lbl_lower or "pengajar" in lbl_lower:
+                    if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn"]): l2_boosts[i] += 0.08
+                elif "keuangan" in lbl_lower or "ukt" in lbl_lower:
+                    if any(w in text_lower for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va"]): l2_boosts[i] += 0.08
+                elif "kurikulum" in lbl_lower or "silabus" in lbl_lower:
+                    if any(w in text_lower for w in ["kurikulum", "silabus", "capaian", "prodi"]): l2_boosts[i] += 0.08
+                # Skenario Riset
+                elif "skripsi" in lbl_lower:
+                    if any(w in text_lower for w in ["skripsi", "tugas akhir", "sarjana"]): l2_boosts[i] += 0.08
+                elif "dataset" in lbl_lower:
+                    if any(w in text_lower for w in ["dataset", "sensor", "citra", "teks"]): l2_boosts[i] += 0.08
+                elif "paten" in lbl_lower or "haki" in lbl_lower:
+                    if any(w in text_lower for w in ["paten", "haki", "invensi", "software", "cipta"]): l2_boosts[i] += 0.08
+                elif "jurnal" in lbl_lower or "sinta" in lbl_lower:
+                    if any(w in text_lower for w in ["jurnal", "sinta"]): l2_boosts[i] += 0.08
+                elif "konferensi" in lbl_lower or "ieee" in lbl_lower:
+                    if any(w in text_lower for w in ["artikel", "ieee", "prosiding", "konferensi"]): l2_boosts[i] += 0.08
+                    
+            for i in range(len(l2_raw_sims)):
+                l2_raw_sims[i] += l2_boosts[i]
+            best_l2_label = tax_layer2[np.argmax(l2_raw_sims)]
+            
+            predicted_labels = [best_l1_label, best_l2_label]
+            cursor.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(predicted_labels), doc_id))
+            
+            relabel_progress["current"] = idx + 1
+            relabel_progress["percentage"] = int(((idx + 1) / total) * 100)
+            
+        conn.commit()
+        conn.close()
+        relabel_progress["status"] = "success"
+    except Exception as e:
+        print(f"Error in async relabeling: {e}")
+        relabel_progress["status"] = "failed"
+
+# --- FLASK ENDPOINTS ---
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/api/status", methods=["GET"])
+def get_status():
+    conn = sqlite3.connect(active_db_path)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM documents")
+    total_docs = c.fetchone()[0]
+    
+    # Hitung Rice Rule optimal X
+    optimal_x = math.ceil(2 * (total_docs ** (1/3))) if total_docs > 0 else 0
+    
+    # Ambil unique labels saat ini di DB
+    c.execute("SELECT labels FROM documents")
+    rows = c.fetchall()
+    conn.close()
+    
+    unique_labels = set()
+    for r in rows:
+        if r[0]:
+            try:
+                for l in json.loads(r[0]):
+                    unique_labels.add(l)
+            except:
+                pass
+                
+    db_name = "Utama (Akademik Kampus)" if active_db_path == DB_PATH else "Demo Real (Riset, Skripsi, Jurnal, Dataset)"
+    db_type = "utama" if active_db_path == DB_PATH else "demo_real"
+    
+    return jsonify({
+        "active_db": db_name,
+        "db_type": db_type,
+        "total_docs": total_docs,
+        "optimal_labels_count": optimal_x,
+        "actual_labels_count": len(unique_labels),
+        "taxonomy": TAXONOMY
+    })
+
+@app.route("/api/switch_db", methods=["POST"])
+def switch_db():
+    global active_db_path, TAXONOMY
+    data = request.get_json()
+    target = data.get("db_type", "utama")
+    
+    if target == "demo_real":
+        active_db_path = DB_REAL_PATH
+        TAXONOMY["Layer_1_Domain"] = list(TAXONOMY_DEMO["Layer_1_Domain"])
+        TAXONOMY["Layer_2_Detail"] = list(TAXONOMY_DEMO["Layer_2_Detail"])
+        if not os.path.exists(DB_REAL_PATH):
+            os.system(f'python "{os.path.join(CURRENT_DIR, "generate_real_demo.py")}"')
+    else:
+        active_db_path = DB_PATH
+        TAXONOMY["Layer_1_Domain"] = list(TAXONOMY_UTAMA["Layer_1_Domain"])
+        TAXONOMY["Layer_2_Detail"] = list(TAXONOMY_UTAMA["Layer_2_Detail"])
+        
+    return jsonify({"status": "success", "message": f"Berhasil dialihkan ke Database {target.upper()}"})
+
+@app.route("/api/search", methods=["POST"])
+def search():
+    data = request.get_json()
+    query = data.get("query", "").strip()
+    alpha = float(data.get("alpha", 0.70))
+    
+    if not query:
+        return jsonify([])
+        
+    doc_vector = get_onnx_embedding(query)
+    
+    conn = sqlite3.connect(active_db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT filename, labels, content, embedding FROM documents")
+    rows_db = cursor.fetchall()
+    conn.close()
+    
+    if not rows_db:
+        return jsonify([])
+        
+    corpus = [row[2] for row in rows_db]
+    filenames = [row[0] for row in rows_db]
+    labels_list = [json.loads(row[1]) for row in rows_db]
+    embeddings = [np.array(json.loads(row[3])) for row in rows_db]
+    
+    # BM25 Sparse Retrieval
+    bm25 = BM25(corpus)
+    query_words = query.lower().split()
+    bm25_scores = [bm25.get_score(query_words, i) for i in range(len(corpus))]
+    max_bm25 = max(bm25_scores) if len(bm25_scores) > 0 else 0.0
+    norm_bm25_scores = [score / max_bm25 if max_bm25 > 0.0 else 0.0 for score in bm25_scores]
+    
+    results = []
+    for i in range(len(rows_db)):
+        dense_sim = get_cosine_similarity(doc_vector, embeddings[i])
+        sparse_score = norm_bm25_scores[i]
+        
+        # Hybrid Fusion (Linear Combination)
+        hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
+        final_sim = max(0.0, min(1.0, hybrid_score)) * 100.0
+        
+        results.append({
+            "filename": filenames[i],
+            "labels": labels_list[i],
+            "content": corpus[i],
+            "dense_score": float(dense_sim * 100.0),
+            "sparse_score": float(sparse_score * 100.0),
+            "similarity": float(final_sim)
+        })
+        
+    # Sort Descending
+    results = sorted(results, key=lambda x: x["similarity"], reverse=True)
+    return jsonify(results[:15])  # Kembalikan top 15 dokumen terbaik
+
+@app.route("/api/predict", methods=["POST"])
+def predict():
+    data = request.get_json()
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "Konten teks kosong"})
+        
+    doc_vector = get_onnx_embedding(text)
+    text_lower = text.lower()
+    
+    # Layer 1 Domain prediction
+    l1_raw_sims = []
+    for label in TAXONOMY["Layer_1_Domain"]:
+        lbl_vector = get_onnx_embedding(label)
+        sim = get_cosine_similarity(doc_vector, lbl_vector)
+        l1_raw_sims.append(sim)
+        
+    l1_boosts = [0.0] * len(TAXONOMY["Layer_1_Domain"])
+    for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
+        if "akademik" in label.lower() or "mahasiswa" in label.lower() or "skripsi" in label.lower():
+            if any(w in text_lower for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]): l1_boosts[i] += 0.08
+        if "dosen" in label.lower() or "dataset" in label.lower() or "riset" in label.lower():
+            if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]): l1_boosts[i] += 0.08
+        if "sks" in label.lower() or "jadwal" in label.lower() or "jurnal" in label.lower() or "artikel" in label.lower():
+            if any(w in text_lower for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel"]): l1_boosts[i] += 0.08
+            
+    for i in range(len(l1_raw_sims)):
+        l1_raw_sims[i] += l1_boosts[i]
+        
+    l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
+    l1_sorted = sorted(zip(TAXONOMY["Layer_1_Domain"], l1_scores), key=lambda x: x[1], reverse=True)
+    
+    # Layer 2 Detail prediction
+    l2_raw_sims = []
+    for label in TAXONOMY["Layer_2_Detail"]:
+        lbl_vector = get_onnx_embedding(label)
+        sim = get_cosine_similarity(doc_vector, lbl_vector)
+        l2_raw_sims.append(sim)
+        
+    l2_boosts = [0.0] * len(TAXONOMY["Layer_2_Detail"])
+    for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
+        lbl_lower = label.lower()
+        if "transkrip" in lbl_lower or "nilai" in lbl_lower:
+            if any(w in text_lower for w in ["transkrip", "ipk", "kps"]): l2_boosts[i] += 0.08
+        elif "krs" in lbl_lower or "rencana studi" in lbl_lower:
+            if any(w in text_lower for w in ["krs", "sks", "rencana studi"]): l2_boosts[i] += 0.08
+        elif "dosen" in lbl_lower or "pengajar" in lbl_lower:
+            if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn"]): l2_boosts[i] += 0.08
+        elif "keuangan" in lbl_lower or "ukt" in lbl_lower:
+            if any(w in text_lower for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va"]): l2_boosts[i] += 0.08
+        elif "kurikulum" in lbl_lower or "silabus" in lbl_lower:
+            if any(w in text_lower for w in ["kurikulum", "silabus", "capaian", "prodi"]): l2_boosts[i] += 0.08
+        # Skenario Riset
+        elif "skripsi" in lbl_lower:
+            if any(w in text_lower for w in ["skripsi", "tugas akhir", "sarjana"]): l2_boosts[i] += 0.08
+        elif "dataset" in lbl_lower:
+            if any(w in text_lower for w in ["dataset", "sensor", "citra", "teks"]): l2_boosts[i] += 0.08
+        elif "paten" in lbl_lower or "haki" in lbl_lower:
+            if any(w in text_lower for w in ["paten", "haki", "invensi", "software", "cipta"]): l2_boosts[i] += 0.08
+        elif "jurnal" in lbl_lower or "sinta" in lbl_lower:
+            if any(w in text_lower for w in ["jurnal", "sinta"]): l2_boosts[i] += 0.08
+        elif "konferensi" in lbl_lower or "ieee" in lbl_lower:
+            if any(w in text_lower for w in ["artikel", "ieee", "prosiding", "konferensi"]): l2_boosts[i] += 0.08
+            
+    for i in range(len(l2_raw_sims)):
+        l2_raw_sims[i] += l2_boosts[i]
+        
+    l2_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l2_raw_sims]
+    l2_sorted = sorted(zip(TAXONOMY["Layer_2_Detail"], l2_scores), key=lambda x: x[1], reverse=True)
+    
+    return jsonify({
+        "layer_1": [{"label": x[0], "score": float(x[1])} for x in l1_sorted],
+        "layer_2": [{"label": x[0], "score": float(x[1])} for x in l2_sorted]
+    })
+
+import werkzeug.utils
+
+@app.route("/api/upload", methods=["POST"])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({"error": "Tidak ada file yang diunggah"})
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "Nama file kosong"})
+        
+    try:
+        filename = werkzeug.utils.secure_filename(file.filename)
+        ext = os.path.splitext(filename)[1].lower()
+        
+        if ext in ['.xlsx', '.csv']:
+            df = pd.read_excel(file) if ext == '.xlsx' else pd.read_csv(file)
+            cols = ", ".join(df.columns.astype(str).tolist())
+            row_samples = []
+            if not df.empty:
+                for idx, row in df.head(3).iterrows():
+                    row_str = " | ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
+                    row_samples.append(f"Baris {idx+1}: {row_str}")
+            sample_text = " // ".join(row_samples)
+            content = f"Dokumen spreadsheet tabel. Kolom: {cols}. Data: {sample_text}"
+        elif ext == '.txt':
+            content = file.read().decode('utf-8', errors='ignore')
+        else:
+            content = f"Dokumen {ext.upper()} dengan nama berkas {filename}. Berisi informasi terstruktur yang diunggah oleh pengguna."
+            
+        return jsonify({"status": "success", "content": content, "filename": filename})
+    except Exception as e:
+        return jsonify({"error": f"Gagal memproses file: {str(e)}"})
+
+@app.route("/api/labels", methods=["GET"])
+def get_labels():
+    conn = sqlite3.connect(active_db_path)
+    c = conn.cursor()
+    c.execute("SELECT labels FROM documents")
+    rows = c.fetchall()
+    conn.close()
+    
+    unique_labels = {}
+    for r in rows:
+        if r[0]:
+            try:
+                for l in json.loads(r[0]):
+                    unique_labels[l] = unique_labels.get(l, 0) + 1
+            except:
+                pass
+                
+    sorted_labels = [{"label": k, "count": v} for k, v in sorted(unique_labels.items())]
+    return jsonify(sorted_labels)
+
+@app.route("/api/labels/edit", methods=["POST"])
+def edit_label():
+    global TAXONOMY
+    data = request.get_json()
+    old_name = data.get("old_name", "").strip()
+    new_name = data.get("new_name", "").strip()
+    
+    if not old_name or not new_name:
+        return jsonify({"status": "error", "message": "Nama label tidak boleh kosong"})
+        
+    try:
+        conn = sqlite3.connect(active_db_path)
+        c = conn.cursor()
+        c.execute("SELECT id, labels FROM documents")
+        rows = c.fetchall()
+        
+        updated = 0
+        for doc_id, labels_str in rows:
+            if labels_str:
+                labels = json.loads(labels_str)
+                if old_name in labels:
+                    new_labels = [new_name if l == old_name else l for l in labels]
+                    c.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(new_labels), doc_id))
+                    updated += 1
+                    
+        conn.commit()
+        conn.close()
+        
+        # Update dynamic lists
+        if old_name in TAXONOMY["Layer_1_Domain"]:
+            TAXONOMY["Layer_1_Domain"] = [new_name if x == old_name else x for x in TAXONOMY["Layer_1_Domain"]]
+        if old_name in TAXONOMY["Layer_2_Detail"]:
+            TAXONOMY["Layer_2_Detail"] = [new_name if x == old_name else x for x in TAXONOMY["Layer_2_Detail"]]
+            
+        return jsonify({"status": "success", "message": f"Berhasil memperbarui label '{old_name}' menjadi '{new_name}' pada {updated} berkas!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Gagal memperbarui label: {e}"})
+
+@app.route("/api/labels/delete", methods=["POST"])
+def delete_label():
+    global TAXONOMY
+    data = request.get_json()
+    lbl_to_delete = data.get("label", "").strip()
+    
+    if not lbl_to_delete:
+        return jsonify({"status": "error", "message": "Nama label kosong"})
+        
+    try:
+        conn = sqlite3.connect(active_db_path)
+        c = conn.cursor()
+        c.execute("SELECT id, labels FROM documents")
+        rows = c.fetchall()
+        
+        updated = 0
+        for doc_id, labels_str in rows:
+            if labels_str:
+                labels = json.loads(labels_str)
+                if lbl_to_delete in labels:
+                    new_labels = [l for l in labels if l != lbl_to_delete]
+                    c.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(new_labels), doc_id))
+                    updated += 1
+                    
+        conn.commit()
+        conn.close()
+        
+        # Update global list
+        if lbl_to_delete in TAXONOMY["Layer_1_Domain"]:
+            TAXONOMY["Layer_1_Domain"].remove(lbl_to_delete)
+        if lbl_to_delete in TAXONOMY["Layer_2_Detail"]:
+            TAXONOMY["Layer_2_Detail"].remove(lbl_to_delete)
+            
+        return jsonify({"status": "success", "message": f"Berhasil menghapus label '{lbl_to_delete}' dari {updated} berkas!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Gagal menghapus label: {e}"})
+
+@app.route("/api/labels/add", methods=["POST"])
+def add_label():
+    global TAXONOMY
+    data = request.get_json()
+    new_lbl = data.get("label", "").strip()
+    level = data.get("level", "layer_2")
+    
+    if not new_lbl:
+        return jsonify({"status": "error", "message": "Nama label kosong"})
+        
+    if level == "layer_1":
+        if new_lbl not in TAXONOMY["Layer_1_Domain"]:
+            TAXONOMY["Layer_1_Domain"].append(new_lbl)
+        else:
+            return jsonify({"status": "error", "message": f"Label '{new_lbl}' sudah ada di Layer 1"})
+    else:
+        if new_lbl not in TAXONOMY["Layer_2_Detail"]:
+            TAXONOMY["Layer_2_Detail"].append(new_lbl)
+        else:
+            return jsonify({"status": "error", "message": f"Label '{new_lbl}' sudah ada di Layer 2"})
+            
+    return jsonify({"status": "success", "message": f"Berhasil menambahkan '{new_lbl}' ke taksonomi aktif!"})
+
+@app.route("/api/labels/regenerate", methods=["POST"])
+def regenerate_labels():
+    global relabel_progress
+    if relabel_progress["status"] == "running":
+        return jsonify({"status": "error", "message": "Proses regenerasi label sedang berjalan"})
+        
+    t = threading.Thread(target=async_relabel_task, args=(active_db_path, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"]))
+    t.start()
+    return jsonify({"status": "success", "message": "Batch regenerasi label ONNX dimulai"})
+
+@app.route("/api/labels/regenerate/progress", methods=["GET"])
+def get_regenerate_progress():
+    return jsonify(relabel_progress)
+
+@app.route("/api/reset_db", methods=["POST"])
+def reset_database():
+    try:
+        if active_db_path == DB_REAL_PATH:
+            # Regenerate using real dataset generator
+            import importlib
+            import generate_real_demo
+            importlib.reload(generate_real_demo)
+            generate_real_demo.generate_real_dataset()
+        else:
+            # Reseed default database
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("DROP TABLE IF EXISTS documents")
+            c.execute("""
+                CREATE TABLE IF NOT EXISTS documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    filename TEXT UNIQUE,
+                    content TEXT,
+                    labels TEXT,
+                    embedding TEXT
+                )
+            """)
+            conn.commit()
+            conn.close()
+            # Run seeding
+            os.system(f'python "{os.path.join(CURRENT_DIR, "app_gui.py")}" --seed')
+            
+        return jsonify({"status": "success", "message": "Database berhasil di-reset dan dibangkitkan ulang secara bersih!"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Gagal mereset database: {e}"})
+
+if __name__ == "__main__":
+    print("[INFO] Memulai server Flask pada http://127.0.0.1:5000")
+    app.run(host="127.0.0.1", port=5000, debug=False)
