@@ -12,10 +12,15 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5000" ^| findstr "LISTENING
 echo [2/3] Memulai server Flask baru...
 start "" cmd /k "python TKI/app_web.py"
 
-echo [3/3] Menunggu server siap...
-timeout /t 3 /nobreak >nul
+echo [3/3] Menunggu server siap (ONNX & Flask Booting)...
+:wait_loop
+netstat -aon | findstr ":5000" | findstr "LISTENING" >nul 2>&1
+if errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto wait_loop
+)
 
-echo Membuka aplikasi di browser...
+echo Server sudah berjalan! Membuka aplikasi di browser...
 start http://127.0.0.1:5000
 
 echo Done!
