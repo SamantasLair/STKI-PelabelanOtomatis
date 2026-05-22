@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import numpy as np
@@ -41,27 +42,56 @@ if not all([os.path.exists(f) for f in excel_files]):
 # =====================================================================
 session = None
 tokenizer = None
+v_null = None
 
-def init_onnx_engine():
-    global session, tokenizer
-    if not os.path.exists(ONNX_FILE):
-        return False
-    try:
-        session = ort.InferenceSession(ONNX_FILE, providers=['CPUExecutionProvider'])
-        tokenizer = AutoTokenizer.from_pretrained(ONNX_DIR)
-        return True
-    except Exception as e:
-        print(f"Error loading ONNX engine: {e}")
-        return False
-
-# Panggil mesin inisialisasi awal
-onnx_ready = init_onnx_engine()
+def extract_key_sentences(text, num_sentences=5):
+    raw_sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
+    sentences = []
+    seen = set()
+    for s in raw_sentences:
+        s_clean = s.strip()
+        if len(s_clean) > 15 and s_clean.lower() not in seen:
+            sentences.append(s_clean)
+            seen.add(s_clean.lower())
+    if len(sentences) <= num_sentences:
+        return text
+    words_per_sentence = [set(re.findall(r'\b\w+\b', s.lower())) for s in sentences]
+    num_s = len(sentences)
+    sim_matrix = np.zeros((num_s, num_s))
+    for i in range(num_s):
+        for j in range(i + 1, num_s):
+            w_i, w_j = words_per_sentence[i], words_per_sentence[j]
+            if not w_i or not w_j:
+                continue
+            intersect = len(w_i.intersection(w_j))
+            if intersect == 0:
+                continue
+            denom = np.log(len(w_i)) + np.log(len(w_j)) + 1.0
+            sim_matrix[i, j] = intersect / denom
+            sim_matrix[j, i] = sim_matrix[i, j]
+    scores = np.ones(num_s)
+    damping = 0.85
+    row_sums = sim_matrix.sum(axis=1)
+    for idx in range(num_s):
+        if row_sums[idx] > 0:
+            sim_matrix[idx, :] /= row_sums[idx]
+        else:
+            sim_matrix[idx, :] = 0.0
+    for _ in range(15):
+        new_scores = (1.0 - damping) + damping * np.dot(sim_matrix.T, scores)
+        if np.allclose(scores, new_scores, atol=1e-4):
+            scores = new_scores
+            break
+        scores = new_scores
+    top_indices = np.argsort(scores)[::-1][:num_sentences]
+    return " ".join([sentences[idx] for idx in sorted(top_indices)])
 
 # Fungsi Ekstraksi Makna Semantik via ONNX
 def get_onnx_embedding(text):
     if session is None or tokenizer is None:
         return np.zeros(5)
-    inputs = tokenizer(text, return_tensors="np", padding="max_length", truncation=True, max_length=256)
+    distilled_text = extract_key_sentences(text, num_sentences=5)
+    inputs = tokenizer(distilled_text, return_tensors="np", padding="max_length", truncation=True, max_length=256)
     input_ids = inputs["input_ids"].astype(np.int64)
     attention_mask = inputs["attention_mask"].astype(np.int64)
     outputs = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})
@@ -71,14 +101,51 @@ def get_onnx_embedding(text):
     probs = 1.0 / (1.0 + np.exp(-logits))
     return probs
 
+
+def init_onnx_engine():
+    global session, tokenizer, v_null
+    if not os.path.exists(ONNX_FILE):
+        return False
+    try:
+        session = ort.InferenceSession(ONNX_FILE, providers=['CPUExecutionProvider'])
+        tokenizer = AutoTokenizer.from_pretrained(ONNX_DIR)
+        # Hitung null embedding untuk mendeteksi baseline bias model
+        v_null = get_onnx_embedding("")
+        return True
+    except Exception as e:
+        print(f"Error loading ONNX engine: {e}")
+        return False
+
+# Panggil mesin inisialisasi awal
+onnx_ready = init_onnx_engine()
+
 # Cosine Similarity
 def get_cosine_similarity(v1, v2):
-    dot_product = np.dot(v1, v2)
-    norm_v1 = np.linalg.norm(v1)
-    norm_v2 = np.linalg.norm(v2)
+    global v_null
+    if v_null is None:
+        dot_product = np.dot(v1, v2)
+        norm_v1 = np.linalg.norm(v1)
+        norm_v2 = np.linalg.norm(v2)
+        if norm_v1 == 0 or norm_v2 == 0:
+            return 0.0
+        return float(dot_product / (norm_v1 * norm_v2))
+    
+    # Thresholded Positive Deviation Cosine Similarity (TPD-Cosine Similarity)
+    # Mengurangi baseline bias model (v_null) dan melakukan thresholding pada nilai deviasi positif
+    v1_c = np.where(v1 - v_null >= 0.02, v1 - v_null, 0.0)
+    v2_c = np.where(v2 - v_null >= 0.02, v2 - v_null, 0.0)
+    norm_v1 = np.linalg.norm(v1_c)
+    norm_v2 = np.linalg.norm(v2_c)
     if norm_v1 == 0 or norm_v2 == 0:
         return 0.0
-    return float(dot_product / (norm_v1 * norm_v2))
+    return float(np.dot(v1_c, v2_c) / (norm_v1 * norm_v2))
+
+def has_keyword(text_lower, keyword):
+    if len(keyword) <= 5:
+        pattern = rf"\b{re.escape(keyword)}\b"
+        return bool(re.search(pattern, text_lower))
+    else:
+        return keyword in text_lower
 
 # Kelas BM25 untuk Sparse Lexical Retrieval
 class BM25:
@@ -291,6 +358,48 @@ TAXONOMY = {
     "Layer_2_Detail": list(TAXONOMY_UTAMA["Layer_2_Detail"])
 }
 
+CHILD_TO_PARENT_MAP = {
+    # Skenario Utama
+    "Transkrip Nilai Lengkap": "Akademik Mahasiswa",
+    "KRS SKS Kelas": "Akademik Mahasiswa",
+    "Daftar Dosen Pengajar": "Administrasi Dosen",
+    "Laporan Keuangan": "Akademik Mahasiswa",
+    "Kurikulum Jurusan": "Jadwal dan SKS Perkuliahan",
+    
+    # Skenario Demo Real
+    "Skripsi Informatika": "Skripsi & Tugas Akhir",
+    "Skripsi Sistem Informasi": "Skripsi & Tugas Akhir",
+    "Skripsi Teknik Komputer": "Skripsi & Tugas Akhir",
+    "Dataset Citra Medis": "Dataset & Publikasi Riset",
+    "Dataset Teks Indonesia": "Dataset & Publikasi Riset",
+    "Dataset Sensor IoT": "Dataset & Publikasi Riset",
+    "Paten HAKI Terdaftar": "Dataset & Publikasi Riset",
+    "Hak Cipta Software": "Dataset & Publikasi Riset",
+    "Desain Industri": "Dataset & Publikasi Riset",
+    "Proposal Hibah Riset": "Dataset & Publikasi Riset",
+    "Jurnal Sinta 1 Gold": "Jurnal & Artikel Ilmiah",
+    "Jurnal Sinta 2 Silver": "Jurnal & Artikel Ilmiah",
+    "Jurnal Sinta 3 Bronze": "Jurnal & Artikel Ilmiah",
+    "Artikel Konferensi IEEE": "Jurnal & Artikel Ilmiah",
+    "Artikel Prosiding Nasional": "Jurnal & Artikel Ilmiah",
+    "Laporan Pengabdian": "Jurnal & Artikel Ilmiah",
+    "Monograf Buku Ajar": "Jurnal & Artikel Ilmiah",
+    
+    # UI Demo GUI
+    "Jurnal Ilmiah Sinta 2": "Publikasi Riset SINTA",
+    "Prosiding Konferensi IEEE": "Publikasi Riset SINTA",
+    "Jurnal Sinta 1 Gold": "Publikasi Riset SINTA",
+    "Jurnal Sinta 3 Silver": "Publikasi Riset SINTA",
+    "Prosiding Nasional": "Publikasi Riset SINTA",
+    "Monograf Buku Ajar": "Publikasi Riset SINTA",
+    "Reviewer Jurnal": "Publikasi Riset SINTA",
+    "Paten Sederhana": "Kekayaan Intelektual Paten",
+    "Laporan Luaran Riset": "Kekayaan Intelektual Paten",
+    "Abdimas Desa Binaan": "Pengabdian Masyarakat Abdimas",
+    "Pelatihan Masyarakat": "Pengabdian Masyarakat Abdimas",
+    "Proposal Riset Mandiri": "Pengabdian Masyarakat Abdimas"
+}
+
 # Premium Switch Canvas Widget
 class PremiumSwitch(tk.Canvas):
     def __init__(self, parent, width=50, height=24, bg_color="#252526", active_color="#4ec9b0", inactive_color="#3e3e3f", thumb_color="#ffffff", command=None, **kwargs):
@@ -486,6 +595,49 @@ class ModernApp:
             justify="left"
         )
         self.lbl_cols.pack(anchor="w", padx=20, pady=2)
+        
+        # Separator Line 2
+        sep2 = tk.Frame(card_input, height=1, bg="#313244")
+        sep2.pack(fill="x", padx=20, pady=10)
+        
+        # Pencarian Teks Bebas (STKI Search)
+        lbl_search_title = tk.Label(
+            card_input, 
+            text="PENCARIAN SEMANTIK (STKI)", 
+            font=("Segoe UI", 9, "bold"), 
+            fg=self.c_success, 
+            bg=self.c_card
+        )
+        lbl_search_title.pack(anchor="w", padx=20, pady=(0, 5))
+        
+        self.ent_search_query = tk.Entry(
+            card_input, 
+            font=("Segoe UI", 9), 
+            bg="#313244", 
+            fg=self.c_text, 
+            bd=0, 
+            insertbackground=self.c_text, 
+            highlightthickness=1, 
+            highlightbackground="#45475a"
+        )
+        self.ent_search_query.pack(fill="x", padx=20, ipady=6)
+        self.ent_search_query.insert(0, "Ketik kueri pencarian...")
+        self.ent_search_query.bind("<FocusIn>", lambda e: self.ent_search_query.delete(0, tk.END) if self.ent_search_query.get() == "Ketik kueri pencarian..." else None)
+        self.ent_search_query.bind("<Return>", lambda e: self.run_text_search())
+        
+        btn_search = tk.Button(
+            card_input, 
+            text="CARI DOKUMEN DI DATABASE", 
+            font=("Segoe UI", 9, "bold"),
+            fg="#11111b",
+            bg="#f9e2af",
+            activebackground="#fae3b0",
+            bd=0, 
+            pady=6,
+            cursor="hand2",
+            command=self.run_text_search
+        )
+        btn_search.pack(fill="x", padx=20, pady=(5, 0))
         
         # Run Button
         self.btn_analyze = tk.Button(
@@ -805,6 +957,110 @@ class ModernApp:
             else:
                 messagebox.showerror("Error Parsing", "Berkas Excel tidak valid atau rusak.")
                 self.btn_analyze.configure(state="disabled")
+
+    def run_text_search(self):
+        query = self.ent_search_query.get().strip()
+        if not query or query == "Ketik kueri pencarian...":
+            messagebox.showwarning("Kueri Kosong", "Masukkan kata kunci pencarian terlebih dahulu.")
+            return
+        try:
+            conn = sqlite3.connect(self.active_db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT filename, content, labels, embedding FROM documents")
+            rows_db = cursor.fetchall()
+            conn.close()
+            if not rows_db:
+                messagebox.showwarning("Database Kosong", "Tidak ada dokumen di database aktif.")
+                return
+            query_vector = get_onnx_embedding(query)
+            corpus = [row[1] for row in rows_db]
+            bm25 = BM25(corpus)
+            query_words = query.lower().split()
+            bm25_scores = [bm25.get_score(query_words, i) for i in range(len(corpus))]
+            max_bm25 = max(bm25_scores) if bm25_scores else 0.0
+            norm_bm25 = [s / max_bm25 if max_bm25 > 0 else 0.0 for s in bm25_scores]
+            results = []
+            for idx, (fname, content, labels, emb_str) in enumerate(rows_db):
+                doc_vec = np.array(json.loads(emb_str))
+                dense_sim = get_cosine_similarity(query_vector, doc_vec)
+                hybrid = 0.70 * dense_sim + 0.30 * norm_bm25[idx]
+                final = max(0.0, min(1.0, hybrid)) * 100.0
+                results.append((fname, json.loads(labels), final, content[:120]))
+            results.sort(key=lambda x: x[2], reverse=True)
+            # Tampilkan hasil di jendela baru
+            res_win = tk.Toplevel(self.root)
+            res_win.title(f"Hasil Pencarian: \"{query[:40]}\"")
+            res_win.geometry("780x480")
+            res_win.configure(bg=self.c_bg)
+            res_win.transient(self.root)
+            lbl_header = tk.Label(
+                res_win,
+                text=f"Hasil Pencarian Hybrid (Dense BERT 70% + BM25 30%)",
+                font=("Segoe UI", 11, "bold"),
+                fg=self.c_success, bg=self.c_bg
+            )
+            lbl_header.pack(anchor="w", padx=20, pady=(15, 3))
+            lbl_query = tk.Label(
+                res_win,
+                text=f"Kueri: \"{query}\"  |  Ditemukan: {len(results)} Dokumen  |  Menampilkan Top-20",
+                font=("Segoe UI", 9), fg=self.c_text_muted, bg=self.c_bg
+            )
+            lbl_query.pack(anchor="w", padx=20, pady=(0, 10))
+            tree_frame = tk.Frame(res_win, bg=self.c_bg)
+            tree_frame.pack(fill="both", expand=True, padx=20, pady=(0, 15))
+            style = ttk.Style()
+            style.theme_use("clam")
+            style.configure("Search.Treeview", background="#1e1e2e", foreground="#d4d4d4",
+                          fieldbackground="#1e1e2e", font=("Segoe UI", 9), rowheight=26)
+            style.configure("Search.Treeview.Heading", background="#313244", foreground="#d4d4d4",
+                          font=("Segoe UI", 9, "bold"))
+            style.map("Search.Treeview", background=[("selected", "#007acc")])
+            cols = ("rank", "filename", "labels", "score", "snippet")
+            tree = ttk.Treeview(tree_frame, columns=cols, show="headings", style="Search.Treeview")
+            tree.heading("rank", text="#")
+            tree.heading("filename", text="Nama Berkas")
+            tree.heading("labels", text="Label")
+            tree.heading("score", text="Skor (%)")
+            tree.heading("snippet", text="Cuplikan Isi")
+            tree.column("rank", width=35, anchor="center")
+            tree.column("filename", width=180)
+            tree.column("labels", width=160)
+            tree.column("score", width=70, anchor="center")
+            tree.column("snippet", width=300)
+            scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=scrollbar.set)
+            tree.pack(side="left", fill="both", expand=True)
+            scrollbar.pack(side="right", fill="y")
+            for i, (fname, labels, score, snippet) in enumerate(results[:20]):
+                tree.insert("", "end", values=(
+                    f"{i+1}",
+                    fname,
+                    " | ".join(labels) if labels else "-",
+                    f"{score:.2f}",
+                    snippet.replace("\n", " ")
+                ))
+            # Update panel utama juga
+            top3_names = [r[0] for r in results[:3]]
+            top3_scores = [r[2] for r in results[:3]]
+            while len(top3_names) < 3:
+                top3_names.append("- Tidak Ada -")
+                top3_scores.append(0.0)
+            self.update_progress_bars(self.db_canvas_best, top3_names, top3_scores, self.c_success)
+            worst3 = sorted(results[3:20] if len(results) > 3 else results, key=lambda x: x[2])[:3]
+            w_names = [r[0] for r in worst3]
+            w_scores = [r[2] for r in worst3]
+            while len(w_names) < 3:
+                w_names.append("- Tidak Ada -")
+                w_scores.append(0.0)
+            self.update_progress_bars(self.db_canvas_worst, w_names, w_scores, self.c_danger)
+            best = results[0] if results else None
+            if best and best[2] > 30.0:
+                self.lbl_final_decision.configure(
+                    text=f"Pencarian: \"{query[:30]}\" => {best[0]} ({best[2]:.2f}%)",
+                    fg=self.c_success
+                )
+        except Exception as e:
+            messagebox.showerror("Error Pencarian", f"Gagal menjalankan pencarian: {e}")
 
     def open_samples_folder(self):
         try:
@@ -1370,49 +1626,97 @@ class ModernApp:
                 emb = get_onnx_embedding(content)
                 text_lower = content.lower()
                 
-                # Layer 1 Domain prediction
-                l1_raw_sims = []
-                for label in TAXONOMY["Layer_1_Domain"]:
-                    lbl_vector = get_onnx_embedding(label)
-                    sim = get_cosine_similarity(emb, lbl_vector)
-                    l1_raw_sims.append(sim)
-                
-                l1_boosts = [0.0, 0.0, 0.0]
-                if any(w in text_lower for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa"]):
-                    l1_boosts[0] += 0.08
-                if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn", "sinta"]):
-                    l1_boosts[1] += 0.08
-                if any(w in text_lower for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "silabus"]):
-                    l1_boosts[2] += 0.08
-                    
-                for i in range(len(l1_raw_sims)):
-                    l1_raw_sims[i] += l1_boosts[i]
-                best_l1_idx = np.argmax(l1_raw_sims)
-                best_l1_label = TAXONOMY["Layer_1_Domain"][best_l1_idx]
-                
-                # Layer 2 Detail prediction
+                # 1. Layer 2 Detail prediction
                 l2_raw_sims = []
                 for label in TAXONOMY["Layer_2_Detail"]:
                     lbl_vector = get_onnx_embedding(label)
                     sim = get_cosine_similarity(emb, lbl_vector)
                     l2_raw_sims.append(sim)
                     
-                l2_boosts = [0.0, 0.0, 0.0, 0.0, 0.0]
-                if any(w in text_lower for w in ["transkrip", "ipk", "kps"]):
-                    l2_boosts[0] += 0.08
-                if any(w in text_lower for w in ["krs", "sks", "rencana studi"]):
-                    l2_boosts[1] += 0.08
-                if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn", "sinta"]):
-                    l2_boosts[2] += 0.08
-                if any(w in text_lower for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va", "mandiri"]):
-                    l2_boosts[3] += 0.08
-                if any(w in text_lower for w in ["kurikulum", "silabus", "capaian", "kkni", "prodi"]):
-                    l2_boosts[4] += 0.08
-                    
+                l2_boosts = [0.0] * len(TAXONOMY["Layer_2_Detail"])
+                for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
+                    lbl_lower = label.lower()
+                    if "transkrip" in lbl_lower or "nilai" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["transkrip", "ipk", "kps", "khs", "grade", "lulus", "yudisium"]):
+                            l2_boosts[i] += 0.20
+                    elif "krs" in lbl_lower or "rencana studi" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["krs", "sks", "rencana studi", "matakuliah", "mata kuliah", "semester"]):
+                            l2_boosts[i] += 0.20
+                    elif "dosen" in lbl_lower or "pengajar" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "lektor", "profesor"]):
+                            l2_boosts[i] += 0.20
+                    elif "keuangan" in lbl_lower or "ukt" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va", "nominal", "lunas", "tagihan", "bayar", "biaya", "jumlah", "transaksi", "kuitansi", "transfer"]):
+                            l2_boosts[i] += 0.20
+                    elif "kurikulum" in lbl_lower or "silabus" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["kurikulum", "silabus", "capaian", "prodi", "rps", "kkni"]):
+                            l2_boosts[i] += 0.20
+                    elif "skripsi" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["skripsi", "tugas akhir", "sarjana", "penelitian", "abstrak", "kesimpulan"]):
+                            l2_boosts[i] += 0.20
+                    elif "dataset" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["dataset", "sensor", "citra", "teks", "data", "sekunder", "primer"]):
+                            l2_boosts[i] += 0.20
+                    elif "paten" in lbl_lower or "haki" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["paten", "haki", "invensi", "software", "cipta", "hak cipta", "merek"]):
+                            l2_boosts[i] += 0.20
+                    elif "jurnal" in lbl_lower or "sinta" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["jurnal", "sinta", "akreditasi", "volume", "issn"]):
+                            l2_boosts[i] += 0.20
+                    elif "konferensi" in lbl_lower or "ieee" in lbl_lower or "prosiding" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["artikel", "ieee", "prosiding", "konferensi", "scopus", "proceeding"]):
+                            l2_boosts[i] += 0.20
+                
                 for i in range(len(l2_raw_sims)):
-                    l2_raw_sims[i] += l2_boosts[i]
-                best_l2_idx = np.argmax(l2_raw_sims)
-                best_l2_label = TAXONOMY["Layer_2_Detail"][best_l2_idx]
+                    if l2_boosts[i] > 0.0:
+                        l2_raw_sims[i] += l2_boosts[i]
+                    else:
+                        if l2_raw_sims[i] < 0.92:
+                            l2_raw_sims[i] = 0.0
+                
+                best_l2_label = "Tidak Terklasifikasi"
+                if max(l2_raw_sims) > 0.0:
+                    best_l2_idx = np.argmax(l2_raw_sims)
+                    best_l2_label = TAXONOMY["Layer_2_Detail"][best_l2_idx]
+
+                # 2. Layer 1 Domain prediction
+                l1_raw_sims = []
+                for label in TAXONOMY["Layer_1_Domain"]:
+                    lbl_vector = get_onnx_embedding(label)
+                    sim = get_cosine_similarity(emb, lbl_vector)
+                    l1_raw_sims.append(sim)
+                
+                l1_boosts = [0.0] * len(TAXONOMY["Layer_1_Domain"])
+                for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
+                    lbl_lower = label.lower()
+                    if "akademik" in lbl_lower or "mahasiswa" in lbl_lower or "skripsi" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]):
+                            l1_boosts[i] += 0.15
+                    if "dosen" in lbl_lower or "dataset" in lbl_lower or "riset" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]):
+                            l1_boosts[i] += 0.15
+                    if "sks" in lbl_lower or "jadwal" in lbl_lower or "jurnal" in lbl_lower or "artikel" in lbl_lower:
+                        if any(has_keyword(text_lower, w) for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel"]):
+                            l1_boosts[i] += 0.15
+                
+                # Apply Hierarchical Taxonomy Consistency boost to Layer 1
+                if best_l2_label in CHILD_TO_PARENT_MAP:
+                    parent_domain = CHILD_TO_PARENT_MAP[best_l2_label]
+                    for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
+                        if label == parent_domain:
+                            l1_boosts[i] += 0.30
+
+                for i in range(len(l1_raw_sims)):
+                    if l1_boosts[i] > 0.0:
+                        l1_raw_sims[i] += l1_boosts[i]
+                    else:
+                        if l1_raw_sims[i] < 0.92:
+                            l1_raw_sims[i] = 0.0
+                
+                best_l1_label = "Tidak Terklasifikasi"
+                if max(l1_raw_sims) > 0.0:
+                    best_l1_idx = np.argmax(l1_raw_sims)
+                    best_l1_label = TAXONOMY["Layer_1_Domain"][best_l1_idx]
                 
                 predicted_labels = [best_l1_label, best_l2_label]
                 cursor.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(predicted_labels), doc_id))
@@ -1441,90 +1745,54 @@ class ModernApp:
         # Hitung Vector Embedding Dokumen via ONNX
         doc_vector = get_onnx_embedding(semantic_text)
         text_lower = semantic_text.lower()
+              # Booster khusus Layer 2
+        l2_boosts = [0.0] * len(TAXONOMY["Layer_2_Detail"])
+        for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
+            lbl_lower = label.lower()
+            if "transkrip" in lbl_lower or "nilai" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["transkrip", "ipk", "kps", "khs", "grade", "lulus", "yudisium"]):
+                    l2_boosts[i] += 0.20
+            elif "krs" in lbl_lower or "rencana studi" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["krs", "sks", "rencana studi", "matakuliah", "mata kuliah", "semester"]):
+                    l2_boosts[i] += 0.20
+            elif "dosen" in lbl_lower or "pengajar" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "lektor", "profesor"]):
+                    l2_boosts[i] += 0.20
+            elif "keuangan" in lbl_lower or "ukt" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va", "nominal", "lunas", "tagihan", "bayar", "biaya", "jumlah", "transaksi", "kuitansi", "transfer"]):
+                    l2_boosts[i] += 0.20
+            elif "kurikulum" in lbl_lower or "silabus" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["kurikulum", "silabus", "capaian", "prodi", "rps", "kkni"]):
+                    l2_boosts[i] += 0.20
+            elif "skripsi" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["skripsi", "tugas akhir", "sarjana", "penelitian", "abstrak", "kesimpulan"]):
+                    l2_boosts[i] += 0.20
+            elif "dataset" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["dataset", "sensor", "citra", "teks", "data", "sekunder", "primer"]):
+                    l2_boosts[i] += 0.20
+            elif "paten" in lbl_lower or "haki" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["paten", "haki", "invensi", "software", "cipta", "hak cipta", "merek"]):
+                    l2_boosts[i] += 0.20
+            elif "jurnal" in lbl_lower or "sinta" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["jurnal", "sinta", "akreditasi", "volume", "issn"]):
+                    l2_boosts[i] += 0.20
+            elif "konferensi" in lbl_lower or "ieee" in lbl_lower or "prosiding" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["artikel", "ieee", "prosiding", "konferensi", "scopus", "proceeding"]):
+                    l2_boosts[i] += 0.20
         
-        # Penyelarasan Semantik Hibrida (Dense + Sparse/Lexical) dengan Parameter Lembut (Gentle Guidance)
-        l1_boosts = [0.0, 0.0, 0.0]
-        
-        # Sinyal Akademik Mahasiswa (Gentle)
-        if any(w in text_lower for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa"]):
-            l1_boosts[0] += 0.08
-            if "nilai" in text_lower and "nim" in text_lower:
-                l1_boosts[0] += 0.05
-                
-        # Sinyal Administrasi Dosen (Gentle)
-        if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn", "sinta"]):
-            l1_boosts[1] += 0.08
-            
-        # Sinyal Jadwal dan SKS Perkuliahan (Gentle)
-        if any(w in text_lower for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "silabus"]):
-            l1_boosts[2] += 0.08
-            if "nilai" in text_lower and "nim" in text_lower:
-                l1_boosts[2] -= 0.05
-                
-        # Booster khusus Layer 2 (Gentle)
-        l2_boosts = [0.0, 0.0, 0.0, 0.0, 0.0]
-        
-        # 0: Transkrip Nilai Lengkap
-        if "nilai" in text_lower or "ipk" in text_lower:
-            l2_boosts[0] += 0.05
-            if "nim" in text_lower:
-                l2_boosts[0] += 0.03
-                
-        # 1: KRS SKS Kelas
-        if "krs" in text_lower or "sks" in text_lower:
-            l2_boosts[1] += 0.05
-            if "nilai" in text_lower:
-                l2_boosts[1] -= 0.03
-                
-        # 2: Daftar Dosen Pengajar
-        if "dosen" in text_lower or "nip" in text_lower:
-            l2_boosts[2] += 0.05
-            
-        # 3: Laporan Keuangan
-        if any(w in text_lower for w in ["keuangan", "bayar", "biaya", "spp", "rekening"]):
-            l2_boosts[3] += 0.05
-            
-        # 4: Kurikulum Jurusan
-        if "kurikulum" in text_lower or "silabus" in text_lower:
-            l2_boosts[4] += 0.05
-        
-        # 1. EVALUASI LAYER 1 (Raw Cosine Similarity Percentage)
-        l1_raw_sims = []
-        for label in TAXONOMY["Layer_1_Domain"]:
-            lbl_vector = get_onnx_embedding(label)
-            sim = get_cosine_similarity(doc_vector, lbl_vector)
-            l1_raw_sims.append(sim)
-            
-        # Terapkan Sinyal Leksikal Hibrida Layer 1
-        for idx in range(len(l1_raw_sims)):
-            l1_raw_sims[idx] += l1_boosts[idx]
-            
-        # Konversi langsung ke Persentase Raw Cosine Similarity [0, 100%]
-        l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
-            
-        # Sort Layer 1 descending
-        l1_sorted = sorted(zip(TAXONOMY["Layer_1_Domain"], l1_scores), key=lambda x: x[1], reverse=True)
-        self.update_progress_bars(self.l1_canvas_best, [x[0] for x in l1_sorted], [x[1] for x in l1_sorted], self.c_success)
-        # Worst Layer 1 (sorted ascending)
-        l1_sorted_worst = sorted(l1_sorted, key=lambda x: x[1])
-        self.update_progress_bars(self.l1_canvas_worst, [x[0] for x in l1_sorted_worst], [x[1] for x in l1_sorted_worst], self.c_danger)
-        
-        # Pilih Domain Tertinggi
-        best_l1_idx = np.argmax(l1_scores)
-        best_l1_label = TAXONOMY["Layer_1_Domain"][best_l1_idx]
-        best_l1_score = l1_scores[best_l1_idx]
-        assigned_l1 = best_l1_label if l1_raw_sims[best_l1_idx] > 0.30 else "Tidak Terklasifikasi"
-        
-        # 2. EVALUASI LAYER 2 (Raw Cosine Similarity Percentage)
+        # 1. EVALUASI LAYER 2 (Raw Cosine Similarity Percentage)
         l2_raw_sims = []
         for label in TAXONOMY["Layer_2_Detail"]:
             lbl_vector = get_onnx_embedding(label)
             sim = get_cosine_similarity(doc_vector, lbl_vector)
             l2_raw_sims.append(sim)
             
-        # Terapkan Sinyal Leksikal Hibrida Layer 2
         for idx in range(len(l2_raw_sims)):
-            l2_raw_sims[idx] += l2_boosts[idx]
+            if l2_boosts[idx] > 0.0:
+                l2_raw_sims[idx] += l2_boosts[idx]
+            else:
+                if l2_raw_sims[idx] < 0.92:
+                    l2_raw_sims[idx] = 0.0
             
         # Konversi langsung ke Persentase Raw Cosine Similarity [0, 100%]
         l2_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l2_raw_sims]
@@ -1542,6 +1810,57 @@ class ModernApp:
         best_l2_label = TAXONOMY["Layer_2_Detail"][best_l2_idx]
         best_l2_score = l2_scores[best_l2_idx]
         assigned_l2 = best_l2_label if l2_raw_sims[best_l2_idx] > 0.35 else "Tidak Terklasifikasi"
+        
+        # Penyelarasan Semantik Hibrida (Dense + Sparse/Lexical) dengan Parameter Lembut (Gentle Guidance)
+        l1_boosts = [0.0] * len(TAXONOMY["Layer_1_Domain"])
+        for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
+            lbl_lower = label.lower()
+            if "akademik" in lbl_lower or "mahasiswa" in lbl_lower or "skripsi" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]):
+                    l1_boosts[i] += 0.15
+            if "dosen" in lbl_lower or "dataset" in lbl_lower or "riset" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]):
+                    l1_boosts[i] += 0.15
+            if "sks" in lbl_lower or "jadwal" in lbl_lower or "jurnal" in lbl_lower or "artikel" in lbl_lower:
+                if any(has_keyword(text_lower, w) for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel"]):
+                    l1_boosts[i] += 0.15
+                    
+        # Apply Hierarchical Taxonomy Consistency boost to Layer 1
+        if assigned_l2 in CHILD_TO_PARENT_MAP:
+            parent_domain = CHILD_TO_PARENT_MAP[assigned_l2]
+            for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
+                if label == parent_domain:
+                    l1_boosts[i] += 0.30
+ 
+        # 2. EVALUASI LAYER 1 (Raw Cosine Similarity Percentage)
+        l1_raw_sims = []
+        for label in TAXONOMY["Layer_1_Domain"]:
+            lbl_vector = get_onnx_embedding(label)
+            sim = get_cosine_similarity(doc_vector, lbl_vector)
+            l1_raw_sims.append(sim)
+            
+        for idx in range(len(l1_raw_sims)):
+            if l1_boosts[idx] > 0.0:
+                l1_raw_sims[idx] += l1_boosts[idx]
+            else:
+                if l1_raw_sims[idx] < 0.92:
+                    l1_raw_sims[idx] = 0.0
+            
+        # Konversi langsung ke Persentase Raw Cosine Similarity [0, 100%]
+        l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
+            
+        # Sort Layer 1 descending
+        l1_sorted = sorted(zip(TAXONOMY["Layer_1_Domain"], l1_scores), key=lambda x: x[1], reverse=True)
+        self.update_progress_bars(self.l1_canvas_best, [x[0] for x in l1_sorted], [x[1] for x in l1_sorted], self.c_success)
+        # Worst Layer 1 (sorted ascending)
+        l1_sorted_worst = sorted(l1_sorted, key=lambda x: x[1])
+        self.update_progress_bars(self.l1_canvas_worst, [x[0] for x in l1_sorted_worst], [x[1] for x in l1_sorted_worst], self.c_danger)
+        
+        # Pilih Domain Tertinggi
+        best_l1_idx = np.argmax(l1_scores)
+        best_l1_label = TAXONOMY["Layer_1_Domain"][best_l1_idx]
+        best_l1_score = l1_scores[best_l1_idx]
+        assigned_l1 = best_l1_label if l1_raw_sims[best_l1_idx] > 0.30 else "Tidak Terklasifikasi"
         
         # 3. EVALUASI LAYER 3 (PENCARIAN DOKUMEN SERUPA DI DATABASE DENGAN HYBRID RETRIEVAL: DENSE + SPARSE BM25)
         db_docs = []

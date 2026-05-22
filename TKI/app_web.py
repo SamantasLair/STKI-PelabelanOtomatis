@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import sqlite3
 import json
 import numpy as np
@@ -44,31 +45,103 @@ TAXONOMY = {
     "Layer_2_Detail": list(TAXONOMY_UTAMA["Layer_2_Detail"])
 }
 
+CHILD_TO_PARENT_MAP = {
+    # Skenario Utama
+    "Transkrip Nilai Lengkap": "Akademik Mahasiswa",
+    "KRS SKS Kelas": "Akademik Mahasiswa",
+    "Daftar Dosen Pengajar": "Administrasi Dosen",
+    "Laporan Keuangan": "Akademik Mahasiswa",
+    "Kurikulum Jurusan": "Jadwal dan SKS Perkuliahan",
+    
+    # Skenario Demo Real
+    "Skripsi Informatika": "Skripsi & Tugas Akhir",
+    "Skripsi Sistem Informasi": "Skripsi & Tugas Akhir",
+    "Skripsi Teknik Komputer": "Skripsi & Tugas Akhir",
+    "Dataset Citra Medis": "Dataset & Publikasi Riset",
+    "Dataset Teks Indonesia": "Dataset & Publikasi Riset",
+    "Dataset Sensor IoT": "Dataset & Publikasi Riset",
+    "Paten HAKI Terdaftar": "Dataset & Publikasi Riset",
+    "Hak Cipta Software": "Dataset & Publikasi Riset",
+    "Desain Industri": "Dataset & Publikasi Riset",
+    "Proposal Hibah Riset": "Dataset & Publikasi Riset",
+    "Jurnal Sinta 1 Gold": "Jurnal & Artikel Ilmiah",
+    "Jurnal Sinta 2 Silver": "Jurnal & Artikel Ilmiah",
+    "Jurnal Sinta 3 Bronze": "Jurnal & Artikel Ilmiah",
+    "Artikel Konferensi IEEE": "Jurnal & Artikel Ilmiah",
+    "Artikel Prosiding Nasional": "Jurnal & Artikel Ilmiah",
+    "Laporan Pengabdian": "Jurnal & Artikel Ilmiah",
+    "Monograf Buku Ajar": "Jurnal & Artikel Ilmiah",
+    
+    # UI Demo GUI
+    "Jurnal Ilmiah Sinta 2": "Publikasi Riset SINTA",
+    "Prosiding Konferensi IEEE": "Publikasi Riset SINTA",
+    "Jurnal Sinta 1 Gold": "Publikasi Riset SINTA",
+    "Jurnal Sinta 3 Silver": "Publikasi Riset SINTA",
+    "Prosiding Nasional": "Publikasi Riset SINTA",
+    "Monograf Buku Ajar": "Publikasi Riset SINTA",
+    "Reviewer Jurnal": "Publikasi Riset SINTA",
+    "Paten Sederhana": "Kekayaan Intelektual Paten",
+    "Laporan Luaran Riset": "Kekayaan Intelektual Paten",
+    "Abdimas Desa Binaan": "Pengabdian Masyarakat Abdimas",
+    "Pelatihan Masyarakat": "Pengabdian Masyarakat Abdimas",
+    "Proposal Riset Mandiri": "Pengabdian Masyarakat Abdimas"
+}
+
 # Inisialisasi ONNX Engine
 import onnxruntime as ort
 from transformers import AutoTokenizer
 
 session = None
 tokenizer = None
+v_null = None
 
-def init_onnx_engine():
-    global session, tokenizer
-    if not os.path.exists(ONNX_FILE):
-        return False
-    try:
-        session = ort.InferenceSession(ONNX_FILE, providers=['CPUExecutionProvider'])
-        tokenizer = AutoTokenizer.from_pretrained(ONNX_DIR)
-        return True
-    except Exception as e:
-        print(f"Error loading ONNX engine: {e}")
-        return False
-
-onnx_ready = init_onnx_engine()
+def extract_key_sentences(text, num_sentences=5):
+    raw_sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
+    sentences = []
+    seen = set()
+    for s in raw_sentences:
+        s_clean = s.strip()
+        if len(s_clean) > 15 and s_clean.lower() not in seen:
+            sentences.append(s_clean)
+            seen.add(s_clean.lower())
+    if len(sentences) <= num_sentences:
+        return text
+    words_per_sentence = [set(re.findall(r'\b\w+\b', s.lower())) for s in sentences]
+    num_s = len(sentences)
+    sim_matrix = np.zeros((num_s, num_s))
+    for i in range(num_s):
+        for j in range(i + 1, num_s):
+            w_i, w_j = words_per_sentence[i], words_per_sentence[j]
+            if not w_i or not w_j:
+                continue
+            intersect = len(w_i.intersection(w_j))
+            if intersect == 0:
+                continue
+            denom = np.log(len(w_i)) + np.log(len(w_j)) + 1.0
+            sim_matrix[i, j] = intersect / denom
+            sim_matrix[j, i] = sim_matrix[i, j]
+    scores = np.ones(num_s)
+    damping = 0.85
+    row_sums = sim_matrix.sum(axis=1)
+    for idx in range(num_s):
+        if row_sums[idx] > 0:
+            sim_matrix[idx, :] /= row_sums[idx]
+        else:
+            sim_matrix[idx, :] = 0.0
+    for _ in range(15):
+        new_scores = (1.0 - damping) + damping * np.dot(sim_matrix.T, scores)
+        if np.allclose(scores, new_scores, atol=1e-4):
+            scores = new_scores
+            break
+        scores = new_scores
+    top_indices = np.argsort(scores)[::-1][:num_sentences]
+    return " ".join([sentences[idx] for idx in sorted(top_indices)])
 
 def get_onnx_embedding(text):
     if session is None or tokenizer is None:
         return np.zeros(5)
-    inputs = tokenizer(text, return_tensors="np", padding="max_length", truncation=True, max_length=256)
+    distilled_text = extract_key_sentences(text, num_sentences=5)
+    inputs = tokenizer(distilled_text, return_tensors="np", padding="max_length", truncation=True, max_length=256)
     input_ids = inputs["input_ids"].astype(np.int64)
     attention_mask = inputs["attention_mask"].astype(np.int64)
     outputs = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})
@@ -76,13 +149,51 @@ def get_onnx_embedding(text):
     probs = 1.0 / (1.0 + np.exp(-logits))
     return probs
 
+
+def init_onnx_engine():
+    global session, tokenizer, v_null
+    if not os.path.exists(ONNX_FILE):
+        return False
+    try:
+        session = ort.InferenceSession(ONNX_FILE, providers=['CPUExecutionProvider'])
+        tokenizer = AutoTokenizer.from_pretrained(ONNX_DIR)
+        # Hitung null embedding untuk mendeteksi baseline bias model
+        v_null = get_onnx_embedding("")
+        return True
+    except Exception as e:
+        print(f"Error loading ONNX engine: {e}")
+        return False
+
+onnx_ready = init_onnx_engine()
+
+
 def get_cosine_similarity(v1, v2):
-    dot_product = np.dot(v1, v2)
-    norm_v1 = np.linalg.norm(v1)
-    norm_v2 = np.linalg.norm(v2)
+    global v_null
+    if v_null is None:
+        dot_product = np.dot(v1, v2)
+        norm_v1 = np.linalg.norm(v1)
+        norm_v2 = np.linalg.norm(v2)
+        if norm_v1 == 0 or norm_v2 == 0:
+            return 0.0
+        return float(dot_product / (norm_v1 * norm_v2))
+    
+    # Thresholded Positive Deviation Cosine Similarity (TPD-Cosine Similarity)
+    # Mengurangi baseline bias model (v_null) dan melakukan thresholding pada nilai deviasi positif
+    v1_c = np.where(v1 - v_null >= 0.02, v1 - v_null, 0.0)
+    v2_c = np.where(v2 - v_null >= 0.02, v2 - v_null, 0.0)
+    norm_v1 = np.linalg.norm(v1_c)
+    norm_v2 = np.linalg.norm(v2_c)
     if norm_v1 == 0 or norm_v2 == 0:
         return 0.0
-    return float(dot_product / (norm_v1 * norm_v2))
+    return float(np.dot(v1_c, v2_c) / (norm_v1 * norm_v2))
+
+def has_keyword(text_lower, keyword):
+    if len(keyword) <= 5:
+        pattern = rf"\b{re.escape(keyword)}\b"
+        return bool(re.search(pattern, text_lower))
+    else:
+        return keyword in text_lower
+
 
 # Class BM25 untuk Leksikal Retrieval
 class BM25:
@@ -146,31 +257,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
             emb = get_onnx_embedding(content)
             text_lower = content.lower()
             
-            # Predict Layer 1
-            l1_raw_sims = []
-            for label in tax_layer1:
-                lbl_vector = get_onnx_embedding(label)
-                sim = get_cosine_similarity(emb, lbl_vector)
-                l1_raw_sims.append(sim)
-                
-            # Dynamic Keyword Boost
-            l1_boosts = [0.0] * len(tax_layer1)
-            for i, label in enumerate(tax_layer1):
-                if "akademik" in label.lower() or "mahasiswa" in label.lower() or "skripsi" in label.lower():
-                    if any(w in text_lower for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]):
-                        l1_boosts[i] += 0.08
-                if "dosen" in label.lower() or "dataset" in label.lower() or "riset" in label.lower():
-                    if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]):
-                        l1_boosts[i] += 0.08
-                if "sks" in label.lower() or "jadwal" in label.lower() or "jurnal" in label.lower() or "artikel" in label.lower():
-                    if any(w in text_lower for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel", "ieee"]):
-                        l1_boosts[i] += 0.08
-            
-            for i in range(len(l1_raw_sims)):
-                l1_raw_sims[i] += l1_boosts[i]
-            best_l1_label = tax_layer1[np.argmax(l1_raw_sims)]
-            
-            # Predict Layer 2
+            # 1. Predict Layer 2
             l2_raw_sims = []
             for label in tax_layer2:
                 lbl_vector = get_onnx_embedding(label)
@@ -181,30 +268,85 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
             for i, label in enumerate(tax_layer2):
                 lbl_lower = label.lower()
                 if "transkrip" in lbl_lower or "nilai" in lbl_lower:
-                    if any(w in text_lower for w in ["transkrip", "ipk", "kps"]): l2_boosts[i] += 0.08
+                    if any(has_keyword(text_lower, w) for w in ["transkrip", "ipk", "kps", "khs", "grade", "lulus", "yudisium"]):
+                        l2_boosts[i] += 0.20
                 elif "krs" in lbl_lower or "rencana studi" in lbl_lower:
-                    if any(w in text_lower for w in ["krs", "sks", "rencana studi"]): l2_boosts[i] += 0.08
+                    if any(has_keyword(text_lower, w) for w in ["krs", "sks", "rencana studi", "matakuliah", "mata kuliah", "semester"]):
+                        l2_boosts[i] += 0.20
                 elif "dosen" in lbl_lower or "pengajar" in lbl_lower:
-                    if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn"]): l2_boosts[i] += 0.08
+                    if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "lektor", "profesor"]):
+                        l2_boosts[i] += 0.20
                 elif "keuangan" in lbl_lower or "ukt" in lbl_lower:
-                    if any(w in text_lower for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va"]): l2_boosts[i] += 0.08
+                    if any(has_keyword(text_lower, w) for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va", "nominal", "lunas", "tagihan", "bayar", "biaya", "jumlah", "transaksi", "kuitansi", "transfer"]):
+                        l2_boosts[i] += 0.20
                 elif "kurikulum" in lbl_lower or "silabus" in lbl_lower:
-                    if any(w in text_lower for w in ["kurikulum", "silabus", "capaian", "prodi"]): l2_boosts[i] += 0.08
-                # Skenario Riset
+                    if any(has_keyword(text_lower, w) for w in ["kurikulum", "silabus", "capaian", "prodi", "rps", "kkni"]):
+                        l2_boosts[i] += 0.20
                 elif "skripsi" in lbl_lower:
-                    if any(w in text_lower for w in ["skripsi", "tugas akhir", "sarjana"]): l2_boosts[i] += 0.08
+                    if any(has_keyword(text_lower, w) for w in ["skripsi", "tugas akhir", "sarjana", "penelitian", "abstrak", "kesimpulan"]):
+                        l2_boosts[i] += 0.20
                 elif "dataset" in lbl_lower:
-                    if any(w in text_lower for w in ["dataset", "sensor", "citra", "teks"]): l2_boosts[i] += 0.08
+                    if any(has_keyword(text_lower, w) for w in ["dataset", "sensor", "citra", "teks", "data", "sekunder", "primer"]):
+                        l2_boosts[i] += 0.20
                 elif "paten" in lbl_lower or "haki" in lbl_lower:
-                    if any(w in text_lower for w in ["paten", "haki", "invensi", "software", "cipta"]): l2_boosts[i] += 0.08
+                    if any(has_keyword(text_lower, w) for w in ["paten", "haki", "invensi", "software", "cipta", "hak cipta", "merek"]):
+                        l2_boosts[i] += 0.20
                 elif "jurnal" in lbl_lower or "sinta" in lbl_lower:
-                    if any(w in text_lower for w in ["jurnal", "sinta"]): l2_boosts[i] += 0.08
-                elif "konferensi" in lbl_lower or "ieee" in lbl_lower:
-                    if any(w in text_lower for w in ["artikel", "ieee", "prosiding", "konferensi"]): l2_boosts[i] += 0.08
+                    if any(has_keyword(text_lower, w) for w in ["jurnal", "sinta", "akreditasi", "volume", "issn"]):
+                        l2_boosts[i] += 0.20
+                elif "konferensi" in lbl_lower or "ieee" in lbl_lower or "prosiding" in lbl_lower:
+                    if any(has_keyword(text_lower, w) for w in ["artikel", "ieee", "prosiding", "konferensi", "scopus", "proceeding"]):
+                        l2_boosts[i] += 0.20
                     
             for i in range(len(l2_raw_sims)):
-                l2_raw_sims[i] += l2_boosts[i]
-            best_l2_label = tax_layer2[np.argmax(l2_raw_sims)]
+                if l2_boosts[i] > 0.0:
+                    l2_raw_sims[i] += l2_boosts[i]
+                else:
+                    if l2_raw_sims[i] < 0.92:
+                        l2_raw_sims[i] = 0.0
+            
+            best_l2_label = "Tidak Terklasifikasi"
+            if max(l2_raw_sims) > 0.0:
+                best_l2_label = tax_layer2[np.argmax(l2_raw_sims)]
+
+            # 2. Predict Layer 1
+            l1_raw_sims = []
+            for label in tax_layer1:
+                lbl_vector = get_onnx_embedding(label)
+                sim = get_cosine_similarity(emb, lbl_vector)
+                l1_raw_sims.append(sim)
+                
+            # Dynamic Keyword Boost
+            l1_boosts = [0.0] * len(tax_layer1)
+            for i, label in enumerate(tax_layer1):
+                lbl_lower = label.lower()
+                if "akademik" in lbl_lower or "mahasiswa" in lbl_lower or "skripsi" in lbl_lower:
+                    if any(has_keyword(text_lower, w) for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]):
+                        l1_boosts[i] += 0.15
+                if "dosen" in lbl_lower or "dataset" in lbl_lower or "riset" in lbl_lower:
+                    if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]):
+                        l1_boosts[i] += 0.15
+                if "sks" in lbl_lower or "jadwal" in lbl_lower or "jurnal" in lbl_lower or "artikel" in lbl_lower:
+                    if any(has_keyword(text_lower, w) for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel"]):
+                        l1_boosts[i] += 0.15
+
+            # Apply Hierarchical Taxonomy Consistency boost to Layer 1
+            if best_l2_label in CHILD_TO_PARENT_MAP:
+                parent_domain = CHILD_TO_PARENT_MAP[best_l2_label]
+                for i, label in enumerate(tax_layer1):
+                    if label == parent_domain:
+                        l1_boosts[i] += 0.30
+
+            for i in range(len(l1_raw_sims)):
+                if l1_boosts[i] > 0.0:
+                    l1_raw_sims[i] += l1_boosts[i]
+                else:
+                    if l1_raw_sims[i] < 0.92:
+                        l1_raw_sims[i] = 0.0
+                
+            best_l1_label = "Tidak Terklasifikasi"
+            if max(l1_raw_sims) > 0.0:
+                best_l1_label = tax_layer1[np.argmax(l1_raw_sims)]
             
             predicted_labels = [best_l1_label, best_l2_label]
             cursor.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(predicted_labels), doc_id))
@@ -344,29 +486,7 @@ def predict():
     doc_vector = get_onnx_embedding(text)
     text_lower = text.lower()
     
-    # Layer 1 Domain prediction
-    l1_raw_sims = []
-    for label in TAXONOMY["Layer_1_Domain"]:
-        lbl_vector = get_onnx_embedding(label)
-        sim = get_cosine_similarity(doc_vector, lbl_vector)
-        l1_raw_sims.append(sim)
-        
-    l1_boosts = [0.0] * len(TAXONOMY["Layer_1_Domain"])
-    for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
-        if "akademik" in label.lower() or "mahasiswa" in label.lower() or "skripsi" in label.lower():
-            if any(w in text_lower for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]): l1_boosts[i] += 0.08
-        if "dosen" in label.lower() or "dataset" in label.lower() or "riset" in label.lower():
-            if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]): l1_boosts[i] += 0.08
-        if "sks" in label.lower() or "jadwal" in label.lower() or "jurnal" in label.lower() or "artikel" in label.lower():
-            if any(w in text_lower for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel"]): l1_boosts[i] += 0.08
-            
-    for i in range(len(l1_raw_sims)):
-        l1_raw_sims[i] += l1_boosts[i]
-        
-    l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
-    l1_sorted = sorted(zip(TAXONOMY["Layer_1_Domain"], l1_scores), key=lambda x: x[1], reverse=True)
-    
-    # Layer 2 Detail prediction
+    # 1. Layer 2 Detail prediction
     l2_raw_sims = []
     for label in TAXONOMY["Layer_2_Detail"]:
         lbl_vector = get_onnx_embedding(label)
@@ -377,32 +497,90 @@ def predict():
     for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
         lbl_lower = label.lower()
         if "transkrip" in lbl_lower or "nilai" in lbl_lower:
-            if any(w in text_lower for w in ["transkrip", "ipk", "kps"]): l2_boosts[i] += 0.08
+            if any(has_keyword(text_lower, w) for w in ["transkrip", "ipk", "kps", "khs", "grade", "lulus", "yudisium"]):
+                l2_boosts[i] += 0.20
         elif "krs" in lbl_lower or "rencana studi" in lbl_lower:
-            if any(w in text_lower for w in ["krs", "sks", "rencana studi"]): l2_boosts[i] += 0.08
+            if any(has_keyword(text_lower, w) for w in ["krs", "sks", "rencana studi", "matakuliah", "mata kuliah", "semester"]):
+                l2_boosts[i] += 0.20
         elif "dosen" in lbl_lower or "pengajar" in lbl_lower:
-            if any(w in text_lower for w in ["nip", "dosen", "pengajar", "nidn"]): l2_boosts[i] += 0.08
+            if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "lektor", "profesor"]):
+                l2_boosts[i] += 0.20
         elif "keuangan" in lbl_lower or "ukt" in lbl_lower:
-            if any(w in text_lower for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va"]): l2_boosts[i] += 0.08
+            if any(has_keyword(text_lower, w) for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va", "nominal", "lunas", "tagihan", "bayar", "biaya", "jumlah", "transaksi", "kuitansi", "transfer"]):
+                l2_boosts[i] += 0.20
         elif "kurikulum" in lbl_lower or "silabus" in lbl_lower:
-            if any(w in text_lower for w in ["kurikulum", "silabus", "capaian", "prodi"]): l2_boosts[i] += 0.08
-        # Skenario Riset
+            if any(has_keyword(text_lower, w) for w in ["kurikulum", "silabus", "capaian", "prodi", "rps", "kkni"]):
+                l2_boosts[i] += 0.20
         elif "skripsi" in lbl_lower:
-            if any(w in text_lower for w in ["skripsi", "tugas akhir", "sarjana"]): l2_boosts[i] += 0.08
+            if any(has_keyword(text_lower, w) for w in ["skripsi", "tugas akhir", "sarjana", "penelitian", "abstrak", "kesimpulan"]):
+                l2_boosts[i] += 0.20
         elif "dataset" in lbl_lower:
-            if any(w in text_lower for w in ["dataset", "sensor", "citra", "teks"]): l2_boosts[i] += 0.08
+            if any(has_keyword(text_lower, w) for w in ["dataset", "sensor", "citra", "teks", "data", "sekunder", "primer"]):
+                l2_boosts[i] += 0.20
         elif "paten" in lbl_lower or "haki" in lbl_lower:
-            if any(w in text_lower for w in ["paten", "haki", "invensi", "software", "cipta"]): l2_boosts[i] += 0.08
+            if any(has_keyword(text_lower, w) for w in ["paten", "haki", "invensi", "software", "cipta", "hak cipta", "merek"]):
+                l2_boosts[i] += 0.20
         elif "jurnal" in lbl_lower or "sinta" in lbl_lower:
-            if any(w in text_lower for w in ["jurnal", "sinta"]): l2_boosts[i] += 0.08
-        elif "konferensi" in lbl_lower or "ieee" in lbl_lower:
-            if any(w in text_lower for w in ["artikel", "ieee", "prosiding", "konferensi"]): l2_boosts[i] += 0.08
+            if any(has_keyword(text_lower, w) for w in ["jurnal", "sinta", "akreditasi", "volume", "issn"]):
+                l2_boosts[i] += 0.20
+        elif "konferensi" in lbl_lower or "ieee" in lbl_lower or "prosiding" in lbl_lower:
+            if any(has_keyword(text_lower, w) for w in ["artikel", "ieee", "prosiding", "konferensi", "scopus", "proceeding"]):
+                l2_boosts[i] += 0.20
             
     for i in range(len(l2_raw_sims)):
-        l2_raw_sims[i] += l2_boosts[i]
+        if l2_boosts[i] > 0.0:
+            l2_raw_sims[i] += l2_boosts[i]
+        else:
+            if l2_raw_sims[i] < 0.92:
+                l2_raw_sims[i] = 0.0
         
     l2_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l2_raw_sims]
     l2_sorted = sorted(zip(TAXONOMY["Layer_2_Detail"], l2_scores), key=lambda x: x[1], reverse=True)
+    
+    best_l2_label = "Tidak Terklasifikasi"
+    if l2_sorted[0][1] > 0.0:
+        best_l2_label = l2_sorted[0][0]
+    else:
+        l2_sorted = [("Tidak Terklasifikasi", 0.0)] + l2_sorted
+
+    # 2. Layer 1 Domain prediction
+    l1_raw_sims = []
+    for label in TAXONOMY["Layer_1_Domain"]:
+        lbl_vector = get_onnx_embedding(label)
+        sim = get_cosine_similarity(doc_vector, lbl_vector)
+        l1_raw_sims.append(sim)
+        
+    l1_boosts = [0.0] * len(TAXONOMY["Layer_1_Domain"])
+    for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
+        lbl_lower = label.lower()
+        if "akademik" in lbl_lower or "mahasiswa" in lbl_lower or "skripsi" in lbl_lower:
+            if any(has_keyword(text_lower, w) for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]):
+                l1_boosts[i] += 0.15
+        if "dosen" in lbl_lower or "dataset" in lbl_lower or "riset" in lbl_lower:
+            if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]):
+                l1_boosts[i] += 0.15
+        if "sks" in lbl_lower or "jadwal" in lbl_lower or "jurnal" in lbl_lower or "artikel" in lbl_lower:
+            if any(has_keyword(text_lower, w) for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel"]):
+                l1_boosts[i] += 0.15
+            
+    # Apply Hierarchical Taxonomy Consistency boost to Layer 1
+    if best_l2_label in CHILD_TO_PARENT_MAP:
+        parent_domain = CHILD_TO_PARENT_MAP[best_l2_label]
+        for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
+            if label == parent_domain:
+                l1_boosts[i] += 0.30
+
+    for i in range(len(l1_raw_sims)):
+        if l1_boosts[i] > 0.0:
+            l1_raw_sims[i] += l1_boosts[i]
+        else:
+            if l1_raw_sims[i] < 0.92:
+                l1_raw_sims[i] = 0.0
+        
+    l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
+    l1_sorted = sorted(zip(TAXONOMY["Layer_1_Domain"], l1_scores), key=lambda x: x[1], reverse=True)
+    if l1_sorted[0][1] == 0.0:
+        l1_sorted = [("Tidak Terklasifikasi", 0.0)] + l1_sorted
     
     return jsonify({
         "layer_1": [{"label": x[0], "score": float(x[1])} for x in l1_sorted],
@@ -434,6 +612,27 @@ def upload_file():
                     row_samples.append(f"Baris {idx+1}: {row_str}")
             sample_text = " // ".join(row_samples)
             content = f"Dokumen spreadsheet tabel. Kolom: {cols}. Data: {sample_text}"
+        elif ext == '.pdf':
+            import pypdf
+            import io
+            pdf_file = io.BytesIO(file.read())
+            reader = pypdf.PdfReader(pdf_file)
+            text_pages = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    text_pages.append(t)
+            content = "\n".join(text_pages)
+            if not content.strip():
+                content = f"Dokumen PDF {filename} (tidak dapat mengekstrak teks)."
+        elif ext == '.docx':
+            import docx
+            import io
+            docx_file = io.BytesIO(file.read())
+            doc = docx.Document(docx_file)
+            content = "\n".join([para.text for para in doc.paragraphs])
+            if not content.strip():
+                content = f"Dokumen Word {filename} (tidak dapat mengekstrak teks)."
         elif ext == '.txt':
             content = file.read().decode('utf-8', errors='ignore')
         else:

@@ -1,0 +1,25 @@
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# Virtual Environment
+venv/
+env/
+.env
+
+# Agen dan Testing
+.agents/
+testing/
+_debug_read.py
+
+# ==========================================
+# PENGECUALIAN (TIDAK BOLEH DIABAIKAN)
+# ==========================================
+# File Database (.db) dan folder _Fondasi 
+# harus tetap masuk ke Git sesuai instruksi.
+!*.db
+!_Fondasi/

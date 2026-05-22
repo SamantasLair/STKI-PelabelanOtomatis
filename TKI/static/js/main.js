@@ -107,7 +107,6 @@ async function switchDatabase(targetDb) {
             document.getElementById('inp-search-query').value = '';
             document.getElementById('search-results-container').innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-icon">📂</div>
                     <h3>Database Dialihkan</h3>
                     <p>Masukkan kata kunci kueri untuk mencari di dalam database ${targetDb.toUpperCase()} yang baru.</p>
                 </div>
@@ -125,6 +124,15 @@ function updateAlphaDisplay(val) {
     document.getElementById('val-alpha-display').textContent = alphaValue.toFixed(2);
 }
 
+// Toggle Leaderboard Snippet Content
+function toggleLeaderboardContent(btn) {
+    const item = btn.closest('.leaderboard-item');
+    const content = item.querySelector('.leaderboard-content-highlight');
+    const isHidden = content.style.display === 'none';
+    content.style.display = isHidden ? 'block' : 'none';
+    btn.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+}
+
 async function executeSearch() {
     const query = document.getElementById('inp-search-query').value.trim();
     if (!query) {
@@ -135,9 +143,8 @@ async function executeSearch() {
     const resultsContainer = document.getElementById('search-results-container');
     resultsContainer.innerHTML = `
         <div class="empty-state">
-            <div class="empty-icon">⏳</div>
-            <h3>Menghitung Kesejajaran Arah Semantik...</h3>
-            <p>Inferensi model saraf ONNX dan kombinasi skor hibrida leksikal BM25 sedang diproses...</p>
+            <h3>Menghitung Skor Kemiripan Hibrida...</h3>
+            <p>Inferensi model BERT ONNX dan kombinasi skor leksikal BM25 sedang diproses...</p>
         </div>
     `;
     
@@ -154,9 +161,8 @@ async function executeSearch() {
         if (docs.length === 0) {
             resultsContainer.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-icon">📭</div>
                     <h3>Dokumen Tidak Ditemukan</h3>
-                    <p>Tidak ada berkas di database yang melampaui batas keyakinan geometris kueri ini.</p>
+                    <p>Tidak ada berkas di database yang melampaui batas keyakinan kueri ini.</p>
                 </div>
             `;
             document.getElementById('results-count-bar').style.display = 'none';
@@ -166,33 +172,38 @@ async function executeSearch() {
         document.getElementById('results-count').textContent = docs.length;
         document.getElementById('results-count-bar').style.display = 'block';
         
-        docs.forEach(doc => {
+        docs.forEach((doc, idx) => {
             const tagsHtml = doc.labels.map(l => `<span class="doc-tag">${l}</span>`).join('');
+            const rank = String(idx + 1).padStart(2, '0');
+            const rankClass = idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : 'rank-other';
             
             const card = document.createElement('div');
-            card.className = 'result-doc-card';
+            card.className = `leaderboard-item ${rankClass}`;
             card.innerHTML = `
-                <div class="result-doc-header">
-                    <div class="doc-meta">
-                        <span class="doc-name">📄 ${doc.filename}</span>
-                        <div class="doc-tags">${tagsHtml}</div>
+                <div class="leaderboard-rank">${rank}</div>
+                <div class="leaderboard-details">
+                    <div class="leaderboard-meta">
+                        <span class="leaderboard-name">${doc.filename}</span>
+                        <div class="leaderboard-tags">${tagsHtml}</div>
                     </div>
-                    <div class="doc-scores">
-                        <div class="score-badge">
-                            <span class="score-val">${doc.dense_score.toFixed(1)}%</span>
-                            <span class="score-label">BERT Dense</span>
+                    <div class="leaderboard-score-wrapper">
+                        <div class="leaderboard-progress-container">
+                            <div class="leaderboard-progress-bar" style="width: ${doc.similarity.toFixed(1)}%"></div>
                         </div>
-                        <div class="score-badge">
-                            <span class="score-val">${doc.sparse_score.toFixed(1)}%</span>
-                            <span class="score-label">BM25 Sparse</span>
-                        </div>
-                        <div class="score-badge primary-score">
-                            <span class="score-val">${doc.similarity.toFixed(1)}%</span>
-                            <span class="score-label">HYBRID SCORE</span>
-                        </div>
+                        <div class="leaderboard-score-value">${doc.similarity.toFixed(1)}% Similarity</div>
                     </div>
                 </div>
-                <div class="doc-content-highlight">${doc.content}</div>
+                <button class="leaderboard-toggle-btn" onclick="toggleLeaderboardContent(this)">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4" style="transition: transform var(--transition-speed) ease;"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                </button>
+                <div class="leaderboard-content-highlight" style="display: none;">
+                    <div class="score-breakdown">
+                        <span class="breakdown-item">BERT Dense: <strong>${doc.dense_score.toFixed(1)}%</strong></span>
+                        <span class="breakdown-divider">|</span>
+                        <span class="breakdown-item">BM25 Sparse: <strong>${doc.sparse_score.toFixed(1)}%</strong></span>
+                    </div>
+                    <div class="highlight-text">${doc.content}</div>
+                </div>
             `;
             resultsContainer.appendChild(card);
         });

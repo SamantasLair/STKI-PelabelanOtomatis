@@ -42,11 +42,56 @@ except Exception as e:
     print(f"[ERROR] Gagal memuat model/tokenizer: {e}")
     sys.exit(1)
 
+import re
+
+def extract_key_sentences(text, num_sentences=5):
+    raw_sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
+    sentences = []
+    seen = set()
+    for s in raw_sentences:
+        s_clean = s.strip()
+        if len(s_clean) > 15 and s_clean.lower() not in seen:
+            sentences.append(s_clean)
+            seen.add(s_clean.lower())
+    if len(sentences) <= num_sentences:
+        return text
+    words_per_sentence = [set(re.findall(r'\b\w+\b', s.lower())) for s in sentences]
+    num_s = len(sentences)
+    sim_matrix = np.zeros((num_s, num_s))
+    for i in range(num_s):
+        for j in range(i + 1, num_s):
+            w_i, w_j = words_per_sentence[i], words_per_sentence[j]
+            if not w_i or not w_j:
+                continue
+            intersect = len(w_i.intersection(w_j))
+            if intersect == 0:
+                continue
+            denom = np.log(len(w_i)) + np.log(len(w_j)) + 1.0
+            sim_matrix[i, j] = intersect / denom
+            sim_matrix[j, i] = sim_matrix[i, j]
+    scores = np.ones(num_s)
+    damping = 0.85
+    row_sums = sim_matrix.sum(axis=1)
+    for idx in range(num_s):
+        if row_sums[idx] > 0:
+            sim_matrix[idx, :] /= row_sums[idx]
+        else:
+            sim_matrix[idx, :] = 0.0
+    for _ in range(15):
+        new_scores = (1.0 - damping) + damping * np.dot(sim_matrix.T, scores)
+        if np.allclose(scores, new_scores, atol=1e-4):
+            scores = new_scores
+            break
+        scores = new_scores
+    top_indices = np.argsort(scores)[::-1][:num_sentences]
+    return " ".join([sentences[idx] for idx in sorted(top_indices)])
+
 # 4. Fungsi Helper: Ekstraksi Representasi Semantik (Embedding) via ONNX
 def get_onnx_embedding(text):
     # Tokenisasi teks input
+    distilled_text = extract_key_sentences(text, num_sentences=5)
     inputs = tokenizer(
-        text, 
+        distilled_text, 
         return_tensors="np", 
         padding="max_length", 
         truncation=True, 

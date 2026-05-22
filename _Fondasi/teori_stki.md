@@ -35,13 +35,14 @@ Format **ONNX (Open Neural Network Exchange)** digunakan untuk menjembatani fase
 
 ---
 
-## 4. Teori Persentase Kemiripan Kosinus Mentah (Raw Cosine Similarity Percentage)
-Untuk menyajikan tingkat kedekatan semantik yang sangat sensitif terhadap perubahan atau penambahan kata pada dokumen masukan secara jujur, kita mengonversi skor Cosine Similarity mentah langsung ke dalam rentang persentase $[0\%, 100\%]$ tanpa menggunakan normalisasi probabilistik Softmax.
+## 4. Teori Thresholded Positive Deviation Cosine Similarity (TPD-Cosine Similarity)
+Untuk menyajikan tingkat kedekatan semantik yang sangat sensitif namun bebas dari background noise model (representation collapse), sistem menerapkan **Thresholded Positive Deviation Cosine Similarity (TPD-Cosine Similarity)**.
 
-### Mengapa Softmax Berskala Suhu Ditinggalkan?
-1. **Bias Ekstrim (One-Hot Bias):** Penggunaan normalisasi Softmax berskala suhu rendah ($T=0.012$) memaksa perbedaan kecil pada kesamaan mentah menjadi keputusan biner ekstrem (satu label 100%, lainnya 0%). Ini tidak realistis dan mencurigakan di hadapan dosen penguji.
-2. **Ketiadaan Sensitivitas Kata:** Softmax memaksa total probabilitas menjadi 100%. Sehingga, penambahan kata-kata minor atau sedikit pengurangan kata pada dokumen masukan tidak akan mengubah skor visual secara dinamis karena akan selalu terdorong paksa ke 100% atau 0%.
-3. **Representasi Asli Vektor:** Dengan menyajikan skor kemiripan kosinus mentah (*Raw Cosine Similarity*), setiap variasi kata pada dokumen masukan akan terrefleksi secara dinamis dan jujur pada grafik kesamaan. Jika ada 1 kata yang kurang, skor kesamaan geometris akan turun secara proporsional (misalnya dari 88% menjadi 82%), memberikan validitas sains yang jauh lebih tinggi.
+### Mengapa Pendekatan Ini Diperlukan?
+1. **Mengeliminasi Bias Default (Null Embedding Bias):** Model BERT-Mini yang dilatih dengan fungsi loss tertentu memiliki baseline bias (logits non-nol bahkan untuk teks kosong `""` atau token padding). Hal ini menyebabkan dokumen apa saja—bahkan berkas acak yang tidak berhubungan—memiliki kemiripan kosinus mentah sebesar $99\%$ terhadap semua label.
+2. **Pengurangan Null Embedding:** Dengan mengurangi vektor embedding dokumen dan label dengan vektor null embedding ($\mathbf{v}_{\text{null}}$), kita mendapatkan representasi deviasi bersih makna dokumen dari bias awal model.
+3. **Thresholding Deviasi Positif:** Dengan menyaring deviasi bersih menggunakan ambang batas $t = 0.02$, kita hanya mempertahankan fitur/kelas semantik yang benar-benar aktif/meningkat secara signifikan pada dokumen tersebut. Fitur yang tidak aktif atau bernilai negatif dipotong menjadi $0.0$.
+4. **Validasi Geometris Jujur:** Jika dokumen masukan tidak memiliki keterkaitan makna dengan label apa pun (seperti dokumen manajemen risiko terhadap label akademik/keuangan), panjang norm vektor tersaring $\|\tilde{\mathbf{A}}\|$ akan bernilai $0.0$, menghasilkan kemiripan kosinus tepat $0.00\%$ secara jujur. Sebaliknya, dokumen yang sangat relevan akan mempertahankan nilai kemiripan tinggi ($90\% - 100\%$).
 
 ---
 

@@ -550,6 +550,226 @@ transform_academic_data("simulasi_nilai.csv", "perkembangan_ipk")
 """))
 
 # =====================================================================
+# 9A. EVALUASI MODEL KLASIFIKASI MULTI-LABEL
+# =====================================================================
+cells.append(nbf.v4.new_markdown_cell("""\
+## 9. Evaluasi Model Klasifikasi Multi-Label
+Mengukur performa model secara kuantitatif menggunakan metrik **Precision**, **Recall**, dan **F1-Score** untuk kelas positif maupun negatif, serta menampilkan **Confusion Matrix** dan **Classification Report** per label.
+
+**Referensi:** Manning, Raghavan & Schütze (2008) — *Introduction to Information Retrieval*, Cambridge University Press.
+"""))
+
+cells.append(nbf.v4.new_code_cell("""\
+from sklearn.metrics import classification_report, confusion_matrix, multilabel_confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# 1. Prediksi pada test set
+model.eval()
+all_preds = []
+all_labels = []
+
+for i in range(0, len(test_dataset), BATCH_SIZE):
+    batch_end = min(i + BATCH_SIZE, len(test_dataset))
+    batch = test_dataset[i:batch_end]
+    input_ids = torch.tensor(batch["input_ids"]).to(next(model.parameters()).device)
+    attention_mask = torch.tensor(batch["attention_mask"]).to(next(model.parameters()).device)
+    labels_batch = torch.tensor(batch["labels"])
+
+    with torch.no_grad():
+        outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = outputs.logits.cpu()
+        preds = (torch.sigmoid(logits) > 0.5).int()
+
+    all_preds.append(preds)
+    all_labels.append(labels_batch.int())
+
+y_pred = torch.cat(all_preds, dim=0).numpy()
+y_true = torch.cat(all_labels, dim=0).numpy()
+
+# 2. Classification Report (Precision, Recall, F1 per label)
+label_names = list(mlb.classes_)
+print("=" * 80)
+print("CLASSIFICATION REPORT (Per Label - Positif & Negatif)")
+print("=" * 80)
+print(classification_report(y_true, y_pred, target_names=label_names, zero_division=0))
+
+# 3. Multilabel Confusion Matrix
+mcm = multilabel_confusion_matrix(y_true, y_pred)
+
+# Hitung metrik positif & negatif secara manual per label
+print("\\n" + "=" * 80)
+print("METRIK POSITIF & NEGATIF PER LABEL")
+print("=" * 80)
+for idx, label in enumerate(label_names):
+    tn, fp, fn, tp = mcm[idx].ravel()
+    prec_pos = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    rec_pos = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1_pos = 2 * prec_pos * rec_pos / (prec_pos + rec_pos) if (prec_pos + rec_pos) > 0 else 0.0
+    prec_neg = tn / (tn + fn) if (tn + fn) > 0 else 0.0
+    rec_neg = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    f1_neg = 2 * prec_neg * rec_neg / (prec_neg + rec_neg) if (prec_neg + rec_neg) > 0 else 0.0
+    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
+    fnr = fn / (fn + tp) if (fn + tp) > 0 else 0.0
+    acc = (tp + tn) / (tp + tn + fp + fn)
+
+    print(f"\\nLabel: {label}")
+    print(f"  TP={tp}, FP={fp}, TN={tn}, FN={fn}")
+    print(f"  Precision+ = {prec_pos:.4f} | Recall+ = {rec_pos:.4f} | F1+ = {f1_pos:.4f}")
+    print(f"  Precision- = {prec_neg:.4f} | Recall- = {rec_neg:.4f} | F1- = {f1_neg:.4f}")
+    print(f"  Accuracy   = {acc:.4f}  | FPR = {fpr:.4f} | FNR = {fnr:.4f}")
+
+# 4. Visualisasi Confusion Matrix (Top 5 Label)
+fig, axes = plt.subplots(1, min(5, len(label_names)), figsize=(4 * min(5, len(label_names)), 4))
+if len(label_names) == 1:
+    axes = [axes]
+for idx in range(min(5, len(label_names))):
+    cm = mcm[idx]
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[idx],
+                xticklabels=['Pred 0', 'Pred 1'], yticklabels=['True 0', 'True 1'])
+    axes[idx].set_title(label_names[idx][:15], fontsize=9)
+plt.suptitle("Confusion Matrix per Label (Top 5)", fontsize=12, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# 5. Akurasi Keseluruhan (Exact Match Ratio)
+exact_match = np.all(y_pred == y_true, axis=1).mean()
+print(f"\\nExact Match Ratio (Akurasi Keseluruhan): {exact_match*100:.2f}%")
+"""))
+
+# =====================================================================
+# 9B. EVALUASI PENCARIAN STKI (10 QUERY + GROUND TRUTH)
+# =====================================================================
+cells.append(nbf.v4.new_markdown_cell("""\
+## 10. Evaluasi Pencarian Semantik STKI (Precision@K, MAP, NDCG@K)
+Mengevaluasi kualitas peringkat hasil pencarian menggunakan **10 kueri pengujian** dengan ground truth yang telah didefinisikan. Metrik yang dihitung: **Precision@5**, **MAP**, dan **NDCG@5**.
+
+**Referensi:** Järvelin & Kekäläinen (2002) — *Cumulated Gain-Based Evaluation of IR Techniques*, ACM TOIS.
+"""))
+
+cells.append(nbf.v4.new_code_cell("""\
+import math
+
+# Fungsi evaluasi IR
+def precision_at_k(retrieved_relevance, k):
+    return sum(retrieved_relevance[:k]) / k
+
+def average_precision(retrieved_relevance, total_relevant):
+    if total_relevant == 0:
+        return 0.0
+    ap, hits = 0.0, 0
+    for i, rel in enumerate(retrieved_relevance):
+        if rel == 1:
+            hits += 1
+            ap += hits / (i + 1)
+    return ap / total_relevant
+
+def dcg_at_k(relevance, k):
+    return sum((2**relevance[i] - 1) / math.log2(i + 2) for i in range(min(k, len(relevance))))
+
+def ndcg_at_k(retrieved_relevance, k, total_relevant):
+    dcg = dcg_at_k(retrieved_relevance, k)
+    ideal = sorted(retrieved_relevance, reverse=True)
+    if total_relevant > len(ideal):
+        ideal = [1] * total_relevant + [0] * (k - total_relevant)
+    idcg = dcg_at_k(ideal, k)
+    return dcg / idcg if idcg > 0 else 0.0
+
+# Ambil seluruh dokumen dari database untuk evaluasi pencarian
+conn = sqlite3.connect(DB_PATH)
+cursor = conn.cursor()
+cursor.execute("SELECT filename, content, labels, embedding FROM documents")
+all_docs = cursor.fetchall()
+conn.close()
+
+if len(all_docs) == 0:
+    print("Database kosong, tidak dapat menjalankan evaluasi STKI.")
+else:
+    # 10 Kueri pengujian dengan konteks berbeda
+    test_queries = [
+        {"query": "transkrip nilai mahasiswa informatika IPK cumlaude",
+         "relevant_keywords": ["transkrip"]},
+        {"query": "rencana studi KRS semester genap mata kuliah",
+         "relevant_keywords": ["rencana_studi", "krs"]},
+        {"query": "daftar nama dosen pengajar fakultas teknologi",
+         "relevant_keywords": ["dosen", "pengajar"]},
+        {"query": "pembayaran UKT keuangan mahasiswa lunas",
+         "relevant_keywords": ["keuangan", "ukt"]},
+        {"query": "kurikulum silabus jurusan informatika",
+         "relevant_keywords": ["kurikulum", "silabus"]},
+        {"query": "nilai akademik mahasiswa predikat memuaskan",
+         "relevant_keywords": ["transkrip", "nilai"]},
+        {"query": "jadwal perkuliahan semester berjalan SKS",
+         "relevant_keywords": ["krs", "sks", "rencana_studi"]},
+        {"query": "NIP dosen spesialisasi kecerdasan buatan",
+         "relevant_keywords": ["dosen"]},
+        {"query": "IPK kumulatif mahasiswa program studi",
+         "relevant_keywords": ["transkrip", "ipk"]},
+        {"query": "struktur mata kuliah capaian pembelajaran",
+         "relevant_keywords": ["kurikulum", "silabus"]},
+    ]
+
+    K = 5
+    all_precisions, all_aps, all_ndcgs = [], [], []
+
+    print("=" * 90)
+    print(f"EVALUASI PENCARIAN STKI — {len(test_queries)} KUERI PENGUJIAN (K={K})")
+    print("=" * 90)
+
+    for qi, tq in enumerate(test_queries):
+        query_text = tq["query"]
+        query_embedding = get_document_embedding(query_text).reshape(1, -1)
+
+        # Hitung similarity dan ranking
+        scored_docs = []
+        for fname, content, labels, emb_str in all_docs:
+            doc_vec = np.array(json.loads(emb_str)).reshape(1, -1)
+            sim = cosine_similarity(query_embedding, doc_vec)[0][0]
+            scored_docs.append((fname, content, labels, sim))
+
+        scored_docs.sort(key=lambda x: x[3], reverse=True)
+        top_k = scored_docs[:K]
+
+        # Tentukan relevansi berdasarkan ground truth keywords
+        relevance = []
+        for fname, content, labels, sim in top_k:
+            is_relevant = any(kw in fname.lower() or kw in content.lower()
+                            for kw in tq["relevant_keywords"])
+            relevance.append(1 if is_relevant else 0)
+
+        # Hitung total dokumen relevan di seluruh korpus
+        total_rel = sum(1 for fname, content, _, _ in all_docs
+                       if any(kw in fname.lower() or kw in content.lower()
+                             for kw in tq["relevant_keywords"]))
+
+        p_at_k = precision_at_k(relevance, K)
+        ap = average_precision(relevance, min(total_rel, K))
+        ndcg = ndcg_at_k(relevance, K, min(total_rel, K))
+
+        all_precisions.append(p_at_k)
+        all_aps.append(ap)
+        all_ndcgs.append(ndcg)
+
+        print(f"\\nQ{qi+1}: \\"{query_text[:50]}...\\"")
+        print(f"  Relevansi Top-{K}: {relevance}")
+        print(f"  Precision@{K}={p_at_k:.4f} | AP={ap:.4f} | NDCG@{K}={ndcg:.4f}")
+
+    # Ringkasan keseluruhan
+    mean_p = np.mean(all_precisions)
+    map_score = np.mean(all_aps)
+    mean_ndcg = np.mean(all_ndcgs)
+
+    print("\\n" + "=" * 90)
+    print("RINGKASAN EVALUASI STKI")
+    print("=" * 90)
+    print(f"  Mean Precision@{K}  : {mean_p*100:.2f}%")
+    print(f"  MAP                : {map_score*100:.2f}%")
+    print(f"  Mean NDCG@{K}       : {mean_ndcg*100:.2f}%")
+    print("=" * 90)
+"""))
+
+
+# =====================================================================
 # 10. EKSPOR ONNX DENGAN AUTO-DEPENDENCY CHECK
 # =====================================================================
 cells.append(nbf.v4.new_markdown_cell("""\
