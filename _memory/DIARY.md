@@ -25,4 +25,12 @@ Buku catatan eksekutif untuk eksperimen, temuan *bug*, dan rekam jejak keputusan
   1. Pilar STKI secara buta mengekstrak *header* (Pseudo-Relevance Feedback) dan berhasil menyimpulkan label target yang relevan adalah **"Transkrip Nilai Lengkap"**.
   2. Lapisan *Schema Alignment* otomatis mengonversi tipe Ordinal ('A', 'B', 'C') ke skala numerik 4.0.
   3. Extractor Hard-Coded (HCRE) mengeksekusi vektorisasi aljabar $O(1)$, melahirkan laporan agregat IPK baru dalam waktu 0.05 detik tanpa halusinasi.
-- **Kesimpulan**: Arsitektur Hibrida STKI + DS ini $100\%$ valid, dapat direplikasi, dan menjadi fondasi yang mutlak solid untuk evolusi aplikasi selanjutnya.
+- **Kesimpulan Awal**: Arsitektur Hibrida STKI + DS ini valid secara konsep teoretis.
+
+## [2026-05-22] - "Analisis Kritis PoC Pilar 3 (Anti-Glazing)"
+- **Eksperimen**: Menjalankan *Stress-Test* `test_pilar3_kritis.py` untuk menguji kerentanan sistem di luar skenario bahagia (*Happy Path*). Kami memasukkan kolom sinonim ("Skor_Mutu"), data kotor ('a', 'X'), dan menghapus kolom esensial.
+- **Hasil Pengujian**: Sistem hancur total ($100\%$ *Failure Rate*).
+  1. STKI gagal menangkap makna leksikal sinonim ("Skor_Mutu") karena pencarian berbasis heuristik, bukan *Dense Vector* (gagal mengenali konteks bahwa "skor" = "nilai").
+  2. Modul Skema hancur karena *case-sensitivity* dan entri tak valid, merusak perhitungan metrik menjadi 0.0.
+  3. HCRE Modul melempar fatal *KeyError* dan merusak komputasi karena mengeksekusi operasi matriks tanpa *pra-validasi* kolom.
+- **Solusi Produksi**: Konsep teoretis RAG sangat tangguh, namun implementasi kode wajib ditingkatkan. Logika IF-ELSE harus dibuang dan mutlak diganti dengan **Vektor Cosine Similarity (ONNX)** untuk klasifikasi template STKI berlapis semantik, **Normalisasi str.upper() / Fuzzy Matching** untuk data pembersihan, dan **Pydantic/Defensive Programming** di level Pandas untuk mencegah *crash* sistem web akibat asersi kolom hilang.
