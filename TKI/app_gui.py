@@ -96,9 +96,9 @@ def get_onnx_embedding(text):
     attention_mask = inputs["attention_mask"].astype(np.int64)
     outputs = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})
     logits = outputs[0].squeeze()
-    # Terapkan aktivasi Sigmoid untuk mengubah logit mentah menjadi probabilitas terkalibrasi [0, 1]
-    # Sesuai teori multi-label BCEWithLogitsLoss pada model BERT.
-    probs = 1.0 / (1.0 + np.exp(-logits))
+    # Terapkan aktivasi Sigmoid dengan Thresholding Kalibrasi Temperatur (T=2.0)
+    # untuk meredam dominasi magnitudo bias pada OOD.
+    probs = 1.0 / (1.0 + np.exp(-logits / 2.0))
     return probs
 
 
@@ -983,8 +983,13 @@ class ModernApp:
             for idx, (fname, content, labels, emb_str) in enumerate(rows_db):
                 doc_vec = np.array(json.loads(emb_str))
                 dense_sim = get_cosine_similarity(query_vector, doc_vec)
-                hybrid = 0.70 * dense_sim + 0.30 * norm_bm25[idx]
-                final = max(0.0, min(1.0, hybrid)) * 100.0
+                sparse_score = norm_bm25[idx]
+                # Hybrid Fusion dengan Penalty Absolut untuk dokumen OOD dan Temperatur 2.0
+                if sparse_score <= 0.05:
+                    hybrid_score = 0.0
+                else:
+                    hybrid_score = 0.70 * float(dense_sim)**2.0 + 0.30 * sparse_score
+                final = max(0.0, min(1.0, hybrid_score)) * 100.0
                 results.append((fname, json.loads(labels), final, content[:120]))
             results.sort(key=lambda x: x[2], reverse=True)
             # Tampilkan hasil di jendela baru
@@ -1901,9 +1906,12 @@ class ModernApp:
                 # B. Sparse Lexical Score via BM25 (skala [0, 1])
                 sparse_score = norm_bm25_scores[idx]
                 
-                # C. Hybrid Rank Fusion (Linear Combination): 70% Dense + 30% Sparse
+                # C. Hybrid Rank Fusion (Linear Combination): 70% Dense + 30% Sparse dengan Penalty OOD
                 alpha = 0.70
-                hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
+                if sparse_score <= 0.05:
+                    hybrid_score = 0.0
+                else:
+                    hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
                 
                 # Batasi kesamaan geometris yang valid
                 final_sim = max(0.0, min(1.0, hybrid_score))

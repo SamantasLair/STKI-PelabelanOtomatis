@@ -28,6 +28,18 @@ $$\|\mathbf{A}\| = \sqrt{\sum_{i=1}^{n} A_i^2} = \sqrt{A_1^2 + A_2^2 + \dots + A
 
 ---
 
+## 2.5. Kalibrasi Temperatur Probabilitas (Temperature Scaling)
+Sebelum menghitung kemiripan kosinus, nilai keluaran *logits* mentah dari model klasifikasi diubah menjadi ruang probabilitas. Untuk mencegah dominasi bias pada kelas tak-relevan (*Out-of-Distribution*), digunakan faktor temperatur ($T > 1$) di dalam fungsi aktivasi Sigmoid untuk melandaikan distribusi.
+
+$$p_i = \sigma_{kalibrasi}(x_i) = \frac{1}{1 + e^{-\frac{x_i}{T}}}$$
+
+### Deskripsi Variabel:
+* $p_i$: Nilai probabilitas akhir untuk kelas ke-$i$ (rentang $0$ hingga $1$).
+* $x_i$: Nilai *logit* mentah dari *node* klasifikasi untuk kelas ke-$i$.
+* $T$: Faktor temperatur yang digunakan untuk menekan dominasi bias ($T = 2.0$ pada sistem).
+
+---
+
 ## 3. Rumus Thresholded Positive Deviation Cosine Similarity (TPD-Cosine Similarity)
 TPD-Cosine similarity menghitung kemiripan kosinus sudut antara dua vektor yang telah dikurangi baseline bias model (null embedding) dan dilakukan penyaringan nilai deviasi positif dengan ambang batas (threshold) $t$. Hal ini bertujuan untuk menghilangkan bias background noise (representation collapse) di mana dokumen acak dapat dinilai $99\%$ mirip dengan label non-relevan.
 
@@ -97,7 +109,7 @@ $$\text{IDF}(q_i) = \ln\left(\frac{N - n(q_i) + 0.5}{n(q_i) + 0.5} + 1.0\right)$
 ## 7. Rumus Hybrid Retrieval Fusion (Linear Combination)
 Rumus untuk menyatukan kekuatan pencarian semantik murni (Dense) dengan pencarian leksikal persis (Sparse BM25) menjadi satu skor kesamaan tunggal yang stabil.
 
-$$\text{Score}_{\text{Hybrid}}(D) = \alpha \cdot \text{Similarity}_{\text{Dense}}(D) + (1 - \alpha) \cdot \text{Score}_{\text{BM25, Normalized}}(D)$$
+$$\text{Score}_{\text{Hybrid}}(D) = \begin{cases} \alpha \cdot \text{Similarity}_{\text{Dense}}(D) + (1 - \alpha) \cdot \text{Score}_{\text{BM25, Normalized}}(D) & \text{if } \text{Score}_{\text{BM25, Normalized}}(D) > \delta \\ 0.0 & \text{otherwise} \end{cases}$$
 
 $$\text{Score}_{\text{BM25, Normalized}}(D) = \frac{\text{Score}_{\text{BM25}}(D)}{\max_{j} \text{Score}_{\text{BM25}}(D_j)}$$
 
@@ -106,6 +118,7 @@ $$\text{Score}_{\text{BM25, Normalized}}(D) = \frac{\text{Score}_{\text{BM25}}(D
 * $\text{Similarity}_{\text{Dense}}(D)$: Kemiripan kosinus representasi vektor padat dokumen $D$ (skala $[0.0, 1.0]$).
 * $\text{Score}_{\text{BM25, Normalized}}(D)$: Skor leksikal BM25 dokumen $D$ yang telah dinormalisasi menggunakan nilai maksimum pada korpus agar berskala $[0.0, 1.0]$.
 * $\alpha$ (alpha): Parameter bobot pencarian semantik (disetel ke $0.70$ atau $70\%$ pada sistem).
+* $\delta$ (delta): Ambang batas bawah (penalty threshold) untuk skor leksikal ($0.05$). Jika dokumen bernilai di bawah ini, ia dipenalti menjadi $0.0$ karena terindikasi sebagai dokumen *Out-of-Distribution* (OOD).
 
 ---
 

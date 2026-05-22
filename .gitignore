@@ -13,6 +13,7 @@ env/
 
 # Agen dan Testing
 .agents/
+_memory/
 testing/
 _debug_read.py
 

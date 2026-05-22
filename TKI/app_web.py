@@ -146,7 +146,7 @@ def get_onnx_embedding(text):
     attention_mask = inputs["attention_mask"].astype(np.int64)
     outputs = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})
     logits = outputs[0].squeeze()
-    probs = 1.0 / (1.0 + np.exp(-logits))
+    probs = 1.0 / (1.0 + np.exp(-logits / 2.0))
     return probs
 
 
@@ -459,8 +459,11 @@ def search():
         dense_sim = get_cosine_similarity(doc_vector, embeddings[i])
         sparse_score = norm_bm25_scores[i]
         
-        # Hybrid Fusion (Linear Combination)
-        hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
+        # Hybrid Fusion (Linear Combination) dengan Penalty Absolut untuk OOD
+        if sparse_score <= 0.05:
+            hybrid_score = 0.0
+        else:
+            hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
         final_sim = max(0.0, min(1.0, hybrid_score)) * 100.0
         
         results.append({
