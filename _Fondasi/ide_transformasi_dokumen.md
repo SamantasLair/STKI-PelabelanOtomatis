@@ -44,3 +44,35 @@ Jika Anda membawa tabel dan konsep ini ke sidang, Anda secara de facto memisahka
 - Dosen yang bertanya soal **Data Science**, akan Anda jawab dengan Pilar 1 & 3 (Ekstraksi, Klasifikasi, Agregasi).
 - Dosen yang bertanya soal **Information Retrieval**, akan Anda jawab dengan Pilar 2 & 3 (BM25, Cosine Similarity, TF-IDF). 
 Ini memberikan justifikasi logis bahwa proyek Anda benar-benar memenuhi irisan dua mata kuliah secara sempurna.
+
+---
+
+## 4. Kajian Teoretis Pilar 3 (Transformasi Hibrida STKI + DS)
+
+Pilar ketiga (*"Jadikan ke yang Lain"*) pada dasarnya adalah wujud arsitektur **Retrieval-Augmented Generation (RAG)** yang berakar kuat pada cabang ilmu **Information Extraction (IE)**. 
+
+Berdasarkan tinjauan literatur ilmiah (Lewis et al., 2020 dalam *"Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks"*), sebuah sistem tidak diwajibkan untuk merepresentasikan cara menyusun laporan menggunakan parameter statis internal model. Sebaliknya, sistem hibrida memanfaatkan STKI (*non-parametric memory*) secara efisien untuk menjemput referensi format cetak biru/*template*, kemudian komponen DS (seperti *Transformer* terpadu atau *Pandas-based Extractor*) bertugas menyarikan data (agregasi, pemfilteran, pembagian kelompok) agar data mentah termanipulasi sesuai dengan kerangka/struktur hasil temuan STKI tersebut.
+
+## 5. Empat Hipotesis Kerentanan Arsitektur Pilar 3 & Solusi Ilmiah
+
+Mewujudkan ide penyatuan pilar STKI dengan DS menuntut pendekatan matematis yang tangguh. Berikut adalah 4 hipotesis kerentanan sistem jika rancangan ini diimplementasikan, beserta peta solusi yang bersandar pada landasan literatur ilmiah:
+
+### Hipotesis 1: Kegagalan Resolusi Temu-Kembali Template (Bottleneck STKI)
+* **Hipotesis**: Sistem gagal menemukan referensi *template* laporan yang tepat di *database* karena representasi *query* teks (dataset XLSX mentah) tidak memiliki *overlap* leksikal/semantik yang cukup dengan metadata struktur laporan yang ada (kesenjangan kosakata).
+* **Teori Ilmiah**: Kelemahan ini dikenal sebagai fenomena *Lexical Chasm* pada ruang vektor terisolasi (Manning, Raghavan & Schütze, 2008).
+* **Solusi Hibrida**: Menerapkan **Pseudo-Relevance Feedback (PRF)** melalui adaptasi **Algoritma Rocchio**. Sistem tidak mencocokkan baris per baris data ke STKI. Alih-alih, DS mengekstraksi 5 pilar nama *header* kolom utama secara statistik (menggunakan *Term Frequency*), merangkumnya menjadi kueri teks bayangan (*pseudo-query*), lalu mengumpankan kueri padat tersebut ke ruang vektor pencarian (*Dense Embedding* BERT).
+
+### Hipotesis 2: Mismatch Tipe Data pada Translasi DS
+* **Hipotesis**: Komponen klasifikasi (*DS Extractor*) akan mengalami galat matematis (*error*). Hal ini terjadi ketika STKI menemukan laporan bertema "Rata-rata IPK Mahasiswa" (yang menuntut tipe data rasio/kontinu), namun kolom dataset aslinya berisi nilai mutu berupa huruf (A, B, C) (tipe data ordinal).
+* **Teori Ilmiah**: Dikenal sebagai *Data Heterogeneity and Schema Matching Error* (Rahm & Bernstein, 2001).
+* **Solusi Hibrida**: Mengimplementasikan lapisan **Semantic Schema Alignment**. Sebelum transformasi bentuk dieksekusi, klasifikator menjalankan *Fuzzy C-Means Clustering* atau matriks pemetaan kamus heuristik (contoh: A = 4.0, B = 3.0) untuk mendeteksi *nature* kolom. Jika kolom gagal ditranslasikan, sistem akan melakukan *Graceful Rejection* (menolak mengubah bentuk laporan secara rapi, alih-alih meledak melempar *fatal error*).
+
+### Hipotesis 3: Ledakan Beban Komputasi Algoritmik (O(N²) vs O(1))
+* **Hipotesis**: Apabila dataset XLSX awal dari mahasiswa tersebut memiliki 50.000 baris observasi, proses mencocokkan tiap baris secara iteratif ke fungsi *template* target akan mengkonsumsi waktu komputasi yang merusak *user experience* aplikasi waktu-nyata (*latency spike*).
+* **Teori Ilmiah**: Masalah kurva eksponensial kompleksitas waktu (*Big-O*) pada arsitektur pencarian *brute-force* sekuensial (Cormen et al., 2009).
+* **Solusi Hibrida**: Penggunaan integrasi **Vectorized Query Execution (Cython C-Backend)** dan implementasi **Locality-Sensitive Hashing (LSH)** pada lapisan STKI. Dengan teknik vektorisasi, operasi transformasi bentuk (`df.groupby().agg()`) tidak dihitung per elemen, melainkan diparalelkan pada level aljabar matriks $\mathbf{M}^T$. Hal ini meredam lonjakan beban komputasi dari laju eksponensial $O(N \log N)$ ke konstan deterministik $O(1)$ untuk komputasi inti.
+
+### Hipotesis 4: Halusinasi Penyajian Data Baru (AI Generative Halucination)
+* **Hipotesis**: Jika pilar ketiga diotomatisasi secara gegabah menggunakan jaringan saraf tiruan penuh (*fully deep learning generator*), sistem dapat 'mengarang bebas' agregasi rata-rata IPK maupun kalkulasi mata kuliah, melenceng dari data mentah aslinya hanya demi memenuhi kerangka *template* yang terambil.
+* **Teori Ilmiah**: Dikenal sebagai *Parametric Knowledge Over-reliance in Generative Models* / Masalah Fakta Sintetis Semu (Bender et al., 2021).
+* **Solusi Hibrida**: Mengikat *output* dengan **Hard-Coded Rule-Based Extractor (HCRE)**. DS tidak boleh memprediksi angka. Sebaliknya, klasifikator STKI + DS hanya berwenang untuk meramalkan **skrip/fungsi matematika apa yang akan dieksekusi**. Komputasi angka sesungguhnya dikerjakan mutlak oleh fungsi aljabar murni *Python*. Kombinasi "Penalaran Semantik (STKI) + Komputasi Aljabar Deteministik (DS)" ini menggaransi kebenaran matematis $100\%$ mutlak yang tak bisa dihalusinasikan.
