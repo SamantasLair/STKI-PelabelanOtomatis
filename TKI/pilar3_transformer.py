@@ -77,8 +77,10 @@ def semantic_schema_alignment_robust(df, template):
         # Cari kolom yang isinya dominan huruf A, B, C, D, E
         target_col = None
         for col in df.columns:
-            if 'nama' in col.lower() or 'id' in col.lower() or 'nim' in col.lower():
-                continue # Hindari mendeteksi kolom Identitas sebagai kolom Nilai
+            # Hindari mendeteksi kolom Identitas atau kolom Non-Akademik sebagai kolom Nilai
+            col_lower = col.lower()
+            if any(w in col_lower for w in ['nama', 'id', 'nim', 'agama', 'darah', 'kelas', 'ruang', 'gender']):
+                continue 
             sample = df[col].astype(str).str.upper().str.strip()
             if sample.isin(['A', 'B', 'C', 'D', 'E']).sum() >= len(df) * 0.5:
                 target_col = col
@@ -125,7 +127,7 @@ def hard_coded_rule_extractor_robust(df, template):
             lambda x: pd.Series({
                 'Total_SKS_Diambil': x[sks_c].sum(),
                 'IPK_Kumulatif': round(x['Total_Skor'].sum() / x[sks_c].sum(), 2) if x[sks_c].sum() > 0 else 0
-            })
+            }), include_groups=False
         ).reset_index()
         
         return laporan
