@@ -34,3 +34,8 @@ Buku catatan eksekutif untuk eksperimen, temuan *bug*, dan rekam jejak keputusan
   2. Modul Skema hancur karena *case-sensitivity* dan entri tak valid, merusak perhitungan metrik menjadi 0.0.
   3. HCRE Modul melempar fatal *KeyError* dan merusak komputasi karena mengeksekusi operasi matriks tanpa *pra-validasi* kolom.
 - **Solusi Produksi**: Konsep teoretis RAG sangat tangguh, namun implementasi kode wajib ditingkatkan. Logika IF-ELSE harus dibuang dan mutlak diganti dengan **Vektor Cosine Similarity (ONNX)** untuk klasifikasi template STKI berlapis semantik, **Normalisasi str.upper() / Fuzzy Matching** untuk data pembersihan, dan **Pydantic/Defensive Programming** di level Pandas untuk mencegah *crash* sistem web akibat asersi kolom hilang.
+
+## [2026-05-22] - "Massive Scale Injection (10,000 OOD Real Documents)"
+- **Eksperimen**: Menjalankan skrip `testing/expand_db_10k.py` secara asinkronus (latar belakang) untuk menambah korpus SQLite hingga $10.000$ baris *raw data* berbahasa Indonesia dari API Wikipedia tanpa manipulasi buatan, menaikkan skala tantangan sistem sebesar 1000%.
+- **Analisis Objektif Skalabilitas**: Kami telah menulis dokumen anti-glazing `testing/analisis_ekspansi_db.md` yang meramalkan kehancuran aplikasi (Server Memory Timeout/OOM) jika pembacaan `SELECT *` tidak segera dipangkas menjadi Lazy-Loading. Perhitungan BM25 *on-the-fly* pada $>10.000$ baris diprediksi akan mencekik waktu pemuatan UI menjadi lebih dari 10 detik.
+- **Solusi Produksi Database**: Disarankan menggunakan *Pre-Computed BM25 Index* menggunakan format data L1 (Pickle/HDF5) dan menyimpan referensi file, bukan murni raw-blob 2 Megabyte di dalam SQLite, untuk menjamin integritas sistem (*Real-time Response Time*).
