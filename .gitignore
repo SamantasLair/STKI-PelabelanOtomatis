@@ -11,6 +11,9 @@ venv/
 env/
 .env
 
+# Folder Teori (Lokal Saja)
+_Fondasi/
+
 # Agen dan Testing
 .agents/
 testing/
@@ -19,8 +22,7 @@ _debug_read.py
 # ==========================================
 # PENGECUALIAN (TIDAK BOLEH DIABAIKAN)
 # ==========================================
-# File Database (.db), folder _Fondasi, dan _memory 
+# File Database (.db) dan _memory 
 # harus tetap masuk ke Git sesuai instruksi.
 !*.db
-!_Fondasi/
 !_memory/
