@@ -13,14 +13,14 @@ env/
 
 # Agen dan Testing
 .agents/
-_memory/
 testing/
 _debug_read.py
 
 # ==========================================
 # PENGECUALIAN (TIDAK BOLEH DIABAIKAN)
 # ==========================================
-# File Database (.db) dan folder _Fondasi 
+# File Database (.db), folder _Fondasi, dan _memory 
 # harus tetap masuk ke Git sesuai instruksi.
 !*.db
 !_Fondasi/
+!_memory/
