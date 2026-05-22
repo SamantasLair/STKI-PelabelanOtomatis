@@ -435,7 +435,8 @@ def search():
     
     conn = sqlite3.connect(active_db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT filename, labels, content, embedding FROM documents")
+    # Anti-OOM: Batasi pengambilan data masif ke maksimum 2500 dokumen agar BM25 on-the-fly tidak meledak
+    cursor.execute("SELECT filename, labels, content, embedding FROM documents LIMIT 2500")
     rows_db = cursor.fetchall()
     conn.close()
     
