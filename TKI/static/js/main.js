@@ -27,6 +27,10 @@ function initTabs() {
         'taxonomy-tab': {
             title: 'Taxonomy & Metadata Manager',
             desc: 'Kelola taksonomi dinamis, hitung Rice Rule matematika, dan jalankan batch relabeling ONNX.'
+        },
+        'recommendation-tab': {
+            title: 'Smart Content Recommendation',
+            desc: 'Rekomendasi aset terpisah antara file Data (.csv/.xlsx) dan file Literatur Akademik (.pdf/.docx).'
         }
     };
 
@@ -210,6 +214,81 @@ async function executeSearch() {
         
     } catch (err) {
         showToast('Kesalahan memproses pencarian hibrida', 'error');
+    }
+}
+
+// ================= RECOMMENDATION ENGINE =================
+async function executeRecommendation() {
+    const query = document.getElementById('inp-reco-query').value.trim();
+    if (!query) {
+        showToast('Ketik kueri pencarian terlebih dahulu!', 'error');
+        return;
+    }
+    
+    const dataContainer = document.getElementById('reco-data-container');
+    const docsContainer = document.getElementById('reco-docs-container');
+    
+    dataContainer.innerHTML = `<div class="empty-state"><p>Mencari dataset...</p></div>`;
+    docsContainer.innerHTML = `<div class="empty-state"><p>Mencari literatur...</p></div>`;
+    
+    try {
+        const response = await fetch('/api/search', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query, alpha: alphaValue })
+        });
+        const docs = await response.json();
+        
+        dataContainer.innerHTML = '';
+        docsContainer.innerHTML = '';
+        
+        const dataFiles = docs.filter(d => {
+            const lower = d.filename.toLowerCase();
+            return lower.endsWith('.csv') || lower.endsWith('.xlsx');
+        });
+        
+        const docFiles = docs.filter(d => {
+            const lower = d.filename.toLowerCase();
+            return lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.txt');
+        });
+        
+        document.getElementById('count-reco-data').textContent = dataFiles.length;
+        document.getElementById('count-reco-docs').textContent = docFiles.length;
+        
+        const renderItem = (doc, idx) => {
+            const rank = String(idx + 1).padStart(2, '0');
+            return `
+                <div class="leaderboard-item" style="padding: 12px 16px; margin-bottom: 8px;">
+                    <div class="leaderboard-rank" style="font-size: 16px;">${rank}</div>
+                    <div class="leaderboard-details">
+                        <div class="leaderboard-meta">
+                            <span class="leaderboard-name" style="font-size: 13px;">${doc.filename}</span>
+                        </div>
+                        <div class="leaderboard-score-wrapper" style="margin-top: 6px;">
+                            <div class="leaderboard-progress-container" style="height: 6px;">
+                                <div class="leaderboard-progress-bar" style="width: ${doc.similarity.toFixed(1)}%; background: ${doc.similarity > 80 ? 'var(--color-success)' : 'var(--color-primary)'};"></div>
+                            </div>
+                            <div class="leaderboard-score-value" style="font-size: 11px;">${doc.similarity.toFixed(1)}% Match</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+        
+        if (dataFiles.length === 0) {
+            dataContainer.innerHTML = `<div class="empty-state"><p>Tidak ada dataset yang cocok ditemukan.</p></div>`;
+        } else {
+            dataFiles.forEach((doc, idx) => { dataContainer.innerHTML += renderItem(doc, idx); });
+        }
+        
+        if (docFiles.length === 0) {
+            docsContainer.innerHTML = `<div class="empty-state"><p>Tidak ada literatur yang cocok ditemukan.</p></div>`;
+        } else {
+            docFiles.forEach((doc, idx) => { docsContainer.innerHTML += renderItem(doc, idx); });
+        }
+        
+    } catch (err) {
+        showToast('Kesalahan memproses pencarian rekomendasi', 'error');
     }
 }
 
