@@ -264,46 +264,12 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 sim = get_cosine_similarity(emb, lbl_vector)
                 l2_raw_sims.append(sim)
                 
-            l2_boosts = [0.0] * len(tax_layer2)
-            for i, label in enumerate(tax_layer2):
-                lbl_lower = label.lower()
-                if "transkrip" in lbl_lower or "nilai" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["transkrip", "ipk", "kps", "khs", "grade", "lulus", "yudisium"]):
-                        l2_boosts[i] += 0.20
-                elif "krs" in lbl_lower or "rencana studi" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["krs", "sks", "rencana studi", "matakuliah", "mata kuliah", "semester"]):
-                        l2_boosts[i] += 0.20
-                elif "dosen" in lbl_lower or "pengajar" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "lektor", "profesor"]):
-                        l2_boosts[i] += 0.20
-                elif "keuangan" in lbl_lower or "ukt" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va", "nominal", "lunas", "tagihan", "bayar", "biaya", "jumlah", "transaksi", "kuitansi", "transfer"]):
-                        l2_boosts[i] += 0.20
-                elif "kurikulum" in lbl_lower or "silabus" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["kurikulum", "silabus", "capaian", "prodi", "rps", "kkni"]):
-                        l2_boosts[i] += 0.20
-                elif "skripsi" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["skripsi", "tugas akhir", "sarjana", "penelitian", "abstrak", "kesimpulan"]):
-                        l2_boosts[i] += 0.20
-                elif "dataset" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["dataset", "sensor", "citra", "teks", "data", "sekunder", "primer"]):
-                        l2_boosts[i] += 0.20
-                elif "paten" in lbl_lower or "haki" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["paten", "haki", "invensi", "software", "cipta", "hak cipta", "merek"]):
-                        l2_boosts[i] += 0.20
-                elif "jurnal" in lbl_lower or "sinta" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["jurnal", "sinta", "akreditasi", "volume", "issn"]):
-                        l2_boosts[i] += 0.20
-                elif "konferensi" in lbl_lower or "ieee" in lbl_lower or "prosiding" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["artikel", "ieee", "prosiding", "konferensi", "scopus", "proceeding"]):
-                        l2_boosts[i] += 0.20
-                    
+            # [FIXED] Dihapus: Seluruh blok cacat matematika Keyword Boost (+0.20 flat rate)
+            # yang menyebabkan probabilitas semu 100% dan menghancurkan integritas Cosine Similarity.
+            
             for i in range(len(l2_raw_sims)):
-                if l2_boosts[i] > 0.0:
-                    l2_raw_sims[i] += l2_boosts[i]
-                else:
-                    if l2_raw_sims[i] < 0.92:
-                        l2_raw_sims[i] = 0.0
+                if l2_raw_sims[i] < 0.85: # Threshold disesuaikan menjadi 0.85
+                    l2_raw_sims[i] = 0.0
             
             best_l2_label = "Tidak Terklasifikasi"
             if max(l2_raw_sims) > 0.0:
@@ -317,32 +283,17 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 l1_raw_sims.append(sim)
                 
             # Dynamic Keyword Boost
-            l1_boosts = [0.0] * len(tax_layer1)
-            for i, label in enumerate(tax_layer1):
-                lbl_lower = label.lower()
-                if "akademik" in lbl_lower or "mahasiswa" in lbl_lower or "skripsi" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]):
-                        l1_boosts[i] += 0.15
-                if "dosen" in lbl_lower or "dataset" in lbl_lower or "riset" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]):
-                        l1_boosts[i] += 0.15
-                if "sks" in lbl_lower or "jadwal" in lbl_lower or "jurnal" in lbl_lower or "artikel" in lbl_lower:
-                    if any(has_keyword(text_lower, w) for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel"]):
-                        l1_boosts[i] += 0.15
-
-            # Apply Hierarchical Taxonomy Consistency boost to Layer 1
+            # [FIXED] Menghapus Keyword Boost di Layer 1
+            # Propagasi konsistensi taksonomi diturunkan ke +0.10 untuk menghindari dominasi absolut.
             if best_l2_label in CHILD_TO_PARENT_MAP:
                 parent_domain = CHILD_TO_PARENT_MAP[best_l2_label]
                 for i, label in enumerate(tax_layer1):
                     if label == parent_domain:
-                        l1_boosts[i] += 0.30
+                        l1_raw_sims[i] = min(1.0, l1_raw_sims[i] + 0.10)
 
             for i in range(len(l1_raw_sims)):
-                if l1_boosts[i] > 0.0:
-                    l1_raw_sims[i] += l1_boosts[i]
-                else:
-                    if l1_raw_sims[i] < 0.92:
-                        l1_raw_sims[i] = 0.0
+                if l1_raw_sims[i] < 0.85:
+                    l1_raw_sims[i] = 0.0
                 
             best_l1_label = "Tidak Terklasifikasi"
             if max(l1_raw_sims) > 0.0:
@@ -448,12 +399,13 @@ def search():
     labels_list = [json.loads(row[1]) for row in rows_db]
     embeddings = [np.array(json.loads(row[3])) for row in rows_db]
     
-    # BM25 Sparse Retrieval
+    # BM25 Sparse Retrieval dengan Normalisasi Probabilistik (Asimtotik)
     bm25 = BM25(corpus)
     query_words = query.lower().split()
     bm25_scores = [bm25.get_score(query_words, i) for i in range(len(corpus))]
-    max_bm25 = max(bm25_scores) if len(bm25_scores) > 0 else 0.0
-    norm_bm25_scores = [score / max_bm25 if max_bm25 > 0.0 else 0.0 for score in bm25_scores]
+    # Menggunakan fungsi 1 - exp(-0.2 * score) untuk normalisasi asimtotik (rentang 0-1)
+    # Alih-alih max() yang merusak relativitas skor.
+    norm_bm25_scores = [1.0 - np.exp(-0.2 * score) for score in bm25_scores]
     
     results = []
     for i in range(len(rows_db)):
@@ -497,46 +449,9 @@ def predict():
         sim = get_cosine_similarity(doc_vector, lbl_vector)
         l2_raw_sims.append(sim)
         
-    l2_boosts = [0.0] * len(TAXONOMY["Layer_2_Detail"])
-    for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
-        lbl_lower = label.lower()
-        if "transkrip" in lbl_lower or "nilai" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["transkrip", "ipk", "kps", "khs", "grade", "lulus", "yudisium"]):
-                l2_boosts[i] += 0.20
-        elif "krs" in lbl_lower or "rencana studi" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["krs", "sks", "rencana studi", "matakuliah", "mata kuliah", "semester"]):
-                l2_boosts[i] += 0.20
-        elif "dosen" in lbl_lower or "pengajar" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "lektor", "profesor"]):
-                l2_boosts[i] += 0.20
-        elif "keuangan" in lbl_lower or "ukt" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["keuangan", "pembayaran", "spp", "ukt", "slip", "va", "nominal", "lunas", "tagihan", "bayar", "biaya", "jumlah", "transaksi", "kuitansi", "transfer"]):
-                l2_boosts[i] += 0.20
-        elif "kurikulum" in lbl_lower or "silabus" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["kurikulum", "silabus", "capaian", "prodi", "rps", "kkni"]):
-                l2_boosts[i] += 0.20
-        elif "skripsi" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["skripsi", "tugas akhir", "sarjana", "penelitian", "abstrak", "kesimpulan"]):
-                l2_boosts[i] += 0.20
-        elif "dataset" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["dataset", "sensor", "citra", "teks", "data", "sekunder", "primer"]):
-                l2_boosts[i] += 0.20
-        elif "paten" in lbl_lower or "haki" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["paten", "haki", "invensi", "software", "cipta", "hak cipta", "merek"]):
-                l2_boosts[i] += 0.20
-        elif "jurnal" in lbl_lower or "sinta" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["jurnal", "sinta", "akreditasi", "volume", "issn"]):
-                l2_boosts[i] += 0.20
-        elif "konferensi" in lbl_lower or "ieee" in lbl_lower or "prosiding" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["artikel", "ieee", "prosiding", "konferensi", "scopus", "proceeding"]):
-                l2_boosts[i] += 0.20
-            
     for i in range(len(l2_raw_sims)):
-        if l2_boosts[i] > 0.0:
-            l2_raw_sims[i] += l2_boosts[i]
-        else:
-            if l2_raw_sims[i] < 0.92:
-                l2_raw_sims[i] = 0.0
+        if l2_raw_sims[i] < 0.85:
+            l2_raw_sims[i] = 0.0
         
     l2_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l2_raw_sims]
     l2_sorted = sorted(zip(TAXONOMY["Layer_2_Detail"], l2_scores), key=lambda x: x[1], reverse=True)
@@ -554,32 +469,15 @@ def predict():
         sim = get_cosine_similarity(doc_vector, lbl_vector)
         l1_raw_sims.append(sim)
         
-    l1_boosts = [0.0] * len(TAXONOMY["Layer_1_Domain"])
-    for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
-        lbl_lower = label.lower()
-        if "akademik" in lbl_lower or "mahasiswa" in lbl_lower or "skripsi" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["nim", "nilai", "transkrip", "ipk", "mahasiswa", "skripsi", "ta"]):
-                l1_boosts[i] += 0.15
-        if "dosen" in lbl_lower or "dataset" in lbl_lower or "riset" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["nip", "dosen", "pengajar", "nidn", "sinta", "dataset", "paten", "haki"]):
-                l1_boosts[i] += 0.15
-        if "sks" in lbl_lower or "jadwal" in lbl_lower or "jurnal" in lbl_lower or "artikel" in lbl_lower:
-            if any(has_keyword(text_lower, w) for w in ["krs", "sks", "jadwal", "perkuliahan", "kurikulum", "jurnal", "artikel"]):
-                l1_boosts[i] += 0.15
-            
-    # Apply Hierarchical Taxonomy Consistency boost to Layer 1
     if best_l2_label in CHILD_TO_PARENT_MAP:
         parent_domain = CHILD_TO_PARENT_MAP[best_l2_label]
         for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
             if label == parent_domain:
-                l1_boosts[i] += 0.30
+                l1_raw_sims[i] = min(1.0, l1_raw_sims[i] + 0.10)
 
     for i in range(len(l1_raw_sims)):
-        if l1_boosts[i] > 0.0:
-            l1_raw_sims[i] += l1_boosts[i]
-        else:
-            if l1_raw_sims[i] < 0.92:
-                l1_raw_sims[i] = 0.0
+        if l1_raw_sims[i] < 0.85:
+            l1_raw_sims[i] = 0.0
         
     l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
     l1_sorted = sorted(zip(TAXONOMY["Layer_1_Domain"], l1_scores), key=lambda x: x[1], reverse=True)

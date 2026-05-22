@@ -14,6 +14,8 @@ Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 - Implementasi 10 Uji Fundamental Ekstrem (*Edge Cases*) pada `testing/test_10_fundamental.py` dan dokumentasi audit arsitektur di `testing/analisis_10_fundamental.md`.
 
 ### Fixed
+- Pemusnahan *Heuristic Keyword Boosting*: Menghapus algoritma `l1_boosts` dan `l2_boosts` (+0.20 flat rate) di `app_web.py` yang terbukti secara matematis **merusak distribusi probabilitas Dense Vector** (menyebabkan klasifikasi semu 100% pada *label* tak terkait hanya karena kata kunci pasaran seperti "jumlah" atau "data").
+- Normalisasi Asimtotik BM25: Mengganti normalisasi berbasis `max()` yang cacat secara relativitas dengan fungsi logistik eksponensial `1.0 - np.exp(-0.2 * score)`.
 - Perbaikan Cacat Logika *False Positive* Fuzzy Pilar 3: Memasang konstrain negatif (`nama`, `agama`, `darah`) pada detektor kolom nilai agar algoritma tidak merampas kolom identitas berisikan huruf ordinal.
 - Perbaikan *FutureWarning* Pandas: Menambahkan argumen `include_groups=False` pada metode `apply` dalam perhitungan IPK Kumulatif di `pilar3_transformer.py`.
 - Pencegahan Memori *Server Crash* (OOM): Menanamkan klausul *Hard Limit* `LIMIT 2500` pada kueri `SELECT *` di backend `app_web.py` `/api/search` untuk memblokir pembacaan *blob* SQLite tanpa batas dan menyelamatkan stabilitas komputasi *on-the-fly* BM25.
