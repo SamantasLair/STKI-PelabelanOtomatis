@@ -256,7 +256,14 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 l2_raw_sims.append(sim)
                 
             # [FIXED] Dihapus: Seluruh blok cacat matematika Keyword Boost (+0.20 flat rate)
-            # yang menyebabkan probabilitas semu 100% dan menghancurkan integritas Cosine Similarity.
+            # [FIXED] SPARSE GATEKEEPER (Lexical Penalty)
+            for i, label in enumerate(tax_layer2):
+                if len(text) < 50:
+                    text_words = set(text.lower().split())
+                    label_words = set(label.lower().split())
+                    overlap = len(text_words.intersection(label_words))
+                    if overlap == 0:
+                        l2_raw_sims[i] = 0.0
             
             for i in range(len(l2_raw_sims)):
                 if l2_raw_sims[i] < 0.85: # Threshold disesuaikan menjadi 0.85
@@ -276,6 +283,18 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
             # Dynamic Keyword Boost
             # [FIXED] Menghapus Propagasi Layer 2 ke Layer 1 (+0.10)
             # Prediksi Layer 1 harus independen berdasar Dense Vector.
+            
+            # [FIXED] SPARSE GATEKEEPER (Lexical Penalty)
+            # Mencegah Dimensional Collapse pada model 5D Logits di teks OOV ("halo halo badnung").
+            # Jika teks < 50 karakter dan tidak ada satupun irisan kata dengan label, skor dihanguskan.
+            for i, label in enumerate(tax_layer1):
+                if len(text) < 50:
+                    text_words = set(text.lower().split())
+                    label_words = set(label.lower().split())
+                    overlap = len(text_words.intersection(label_words))
+                    if overlap == 0:
+                        l1_raw_sims[i] = 0.0
+            
             for i in range(len(l1_raw_sims)):
                 if l1_raw_sims[i] < 0.85:
                     l1_raw_sims[i] = 0.0
@@ -434,6 +453,14 @@ def predict():
         sim = get_cosine_similarity(doc_vector, lbl_vector)
         l2_raw_sims.append(sim)
         
+    # [FIXED] SPARSE GATEKEEPER
+    for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
+        if len(text) < 50:
+            text_words = set(text.lower().split())
+            label_words = set(label.lower().split())
+            if len(text_words.intersection(label_words)) == 0:
+                l2_raw_sims[i] = 0.0
+
     for i in range(len(l2_raw_sims)):
         if l2_raw_sims[i] < 0.85:
             l2_raw_sims[i] = 0.0
@@ -455,6 +482,15 @@ def predict():
         l1_raw_sims.append(sim)
         
     # [FIXED] Menghapus propagasi hierarki di Layer 1.
+    
+    # [FIXED] SPARSE GATEKEEPER
+    for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
+        if len(text) < 50:
+            text_words = set(text.lower().split())
+            label_words = set(label.lower().split())
+            if len(text_words.intersection(label_words)) == 0:
+                l1_raw_sims[i] = 0.0
+
     for i in range(len(l1_raw_sims)):
         if l1_raw_sims[i] < 0.85:
             l1_raw_sims[i] = 0.0
