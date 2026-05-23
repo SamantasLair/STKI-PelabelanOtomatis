@@ -141,24 +141,25 @@ def get_onnx_embedding(text):
     if session is None or tokenizer is None:
         return np.zeros(5)
     distilled_text = extract_key_sentences(text, num_sentences=5)
-    inputs = tokenizer(distilled_text, return_tensors="np", padding="max_length", truncation=True, max_length=256)
+    # [FIXED] IndoBERT sangat sensitif huruf kapital dan sering menganggapnya [UNK].
+    # Text harus diturunkan menjadi lowercase sebelum masuk tokenizer.
+    inputs = tokenizer(distilled_text.lower(), return_tensors="np", padding="max_length", truncation=True, max_length=256)
     input_ids = inputs["input_ids"].astype(np.int64)
     attention_mask = inputs["attention_mask"].astype(np.int64)
     outputs = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})
+    # [FIXED] Mengembalikan Logits murni dari Dense Layer.
+    # Sigmoid menghancurkan jarak sudut antar vektor (membawa semua nilai ke kuadran positif sempit).
     logits = outputs[0].squeeze()
-    probs = 1.0 / (1.0 + np.exp(-logits / 2.0))
-    return probs
+    return logits
 
 
 def init_onnx_engine():
-    global session, tokenizer, v_null
+    global session, tokenizer
     if not os.path.exists(ONNX_FILE):
         return False
     try:
         session = ort.InferenceSession(ONNX_FILE, providers=['CPUExecutionProvider'])
         tokenizer = AutoTokenizer.from_pretrained(ONNX_DIR)
-        # Hitung null embedding untuk mendeteksi baseline bias model
-        v_null = get_onnx_embedding("")
         return True
     except Exception as e:
         print(f"Error loading ONNX engine: {e}")
@@ -168,24 +169,14 @@ onnx_ready = init_onnx_engine()
 
 
 def get_cosine_similarity(v1, v2):
-    global v_null
-    if v_null is None:
-        dot_product = np.dot(v1, v2)
-        norm_v1 = np.linalg.norm(v1)
-        norm_v2 = np.linalg.norm(v2)
-        if norm_v1 == 0 or norm_v2 == 0:
-            return 0.0
-        return float(dot_product / (norm_v1 * norm_v2))
-    
-    # Thresholded Positive Deviation Cosine Similarity (TPD-Cosine Similarity)
-    # Mengurangi baseline bias model (v_null) dan melakukan thresholding pada nilai deviasi positif
-    v1_c = np.where(v1 - v_null >= 0.02, v1 - v_null, 0.0)
-    v2_c = np.where(v2 - v_null >= 0.02, v2 - v_null, 0.0)
-    norm_v1 = np.linalg.norm(v1_c)
-    norm_v2 = np.linalg.norm(v2_c)
+    # [FIXED] Pure Cosine Similarity
+    # Pemusnahan v_null thresholding yang terbukti memicu Collapse Thresholding
+    # di mana seluruh dokumen mendapatkan kemiripan sama persis (contoh: 86.3%).
+    norm_v1 = np.linalg.norm(v1)
+    norm_v2 = np.linalg.norm(v2)
     if norm_v1 == 0 or norm_v2 == 0:
         return 0.0
-    return float(np.dot(v1_c, v2_c) / (norm_v1 * norm_v2))
+    return float(np.dot(v1, v2) / (norm_v1 * norm_v2))
 
 def has_keyword(text_lower, keyword):
     if len(keyword) <= 5:
@@ -283,14 +274,8 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 l1_raw_sims.append(sim)
                 
             # Dynamic Keyword Boost
-            # [FIXED] Menghapus Keyword Boost di Layer 1
-            # Propagasi konsistensi taksonomi diturunkan ke +0.10 untuk menghindari dominasi absolut.
-            if best_l2_label in CHILD_TO_PARENT_MAP:
-                parent_domain = CHILD_TO_PARENT_MAP[best_l2_label]
-                for i, label in enumerate(tax_layer1):
-                    if label == parent_domain:
-                        l1_raw_sims[i] = min(1.0, l1_raw_sims[i] + 0.10)
-
+            # [FIXED] Menghapus Propagasi Layer 2 ke Layer 1 (+0.10)
+            # Prediksi Layer 1 harus independen berdasar Dense Vector.
             for i in range(len(l1_raw_sims)):
                 if l1_raw_sims[i] < 0.85:
                     l1_raw_sims[i] = 0.0
@@ -469,12 +454,7 @@ def predict():
         sim = get_cosine_similarity(doc_vector, lbl_vector)
         l1_raw_sims.append(sim)
         
-    if best_l2_label in CHILD_TO_PARENT_MAP:
-        parent_domain = CHILD_TO_PARENT_MAP[best_l2_label]
-        for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
-            if label == parent_domain:
-                l1_raw_sims[i] = min(1.0, l1_raw_sims[i] + 0.10)
-
+    # [FIXED] Menghapus propagasi hierarki di Layer 1.
     for i in range(len(l1_raw_sims)):
         if l1_raw_sims[i] < 0.85:
             l1_raw_sims[i] = 0.0
