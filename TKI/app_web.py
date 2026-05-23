@@ -263,8 +263,11 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 label_words = set(label.lower().split())
                 overlap = len(text_words.intersection(label_words))
                 if overlap > 0:
-                    l2_raw_sims[i] = min(1.0, l2_raw_sims[i] * (1.0 + (overlap * 0.15)))
+                    # Tidak mem-boost secara agresif untuk mencegah saturasi 100%
+                    # Hanya menjaga nilai Base Cosine Similarity murni
+                    l2_raw_sims[i] = l2_raw_sims[i] * 1.0 
                 else:
+                    # Penalti bagi yang tidak ada irisan sama sekali agar gagal tembus threshold UI
                     l2_raw_sims[i] = l2_raw_sims[i] * 0.80
             
             for i in range(len(l2_raw_sims)):
@@ -292,7 +295,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 label_words = set(label.lower().split())
                 overlap = len(text_words.intersection(label_words))
                 if overlap > 0:
-                    l1_raw_sims[i] = min(1.0, l1_raw_sims[i] * (1.0 + (overlap * 0.15)))
+                    l1_raw_sims[i] = l1_raw_sims[i] * 1.0
                 else:
                     l1_raw_sims[i] = l1_raw_sims[i] * 0.80
             
@@ -460,7 +463,7 @@ def predict():
         label_words = set(label.lower().split())
         overlap = len(text_words.intersection(label_words))
         if overlap > 0:
-            l2_raw_sims[i] = min(1.0, l2_raw_sims[i] * (1.0 + (overlap * 0.15)))
+            l2_raw_sims[i] = l2_raw_sims[i] * 1.0
         else:
             l2_raw_sims[i] = l2_raw_sims[i] * 0.80
 
@@ -492,7 +495,7 @@ def predict():
         label_words = set(label.lower().split())
         overlap = len(text_words.intersection(label_words))
         if overlap > 0:
-            l1_raw_sims[i] = min(1.0, l1_raw_sims[i] * (1.0 + (overlap * 0.15)))
+            l1_raw_sims[i] = l1_raw_sims[i] * 1.0
         else:
             l1_raw_sims[i] = l1_raw_sims[i] * 0.80
 
