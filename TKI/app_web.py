@@ -89,6 +89,8 @@ CHILD_TO_PARENT_MAP = {
 
 # Inisialisasi ONNX Engine
 import onnxruntime as ort
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
 from transformers import AutoTokenizer
 
 session = None
