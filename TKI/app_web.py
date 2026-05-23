@@ -257,15 +257,15 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 sim = get_cosine_similarity(emb, lbl_vector)
                 l2_raw_sims.append(sim)
                 
-            # [FIXED] Dihapus: Seluruh blok cacat matematika Keyword Boost (+0.20 flat rate)
-            # [FIXED] SPARSE GATEKEEPER (Lexical Penalty)
+            # [FIXED] SOFT LEXICAL GATEKEEPER
             for i, label in enumerate(tax_layer2):
-                if len(text) < 50:
-                    text_words = set(text.lower().split())
-                    label_words = set(label.lower().split())
-                    overlap = len(text_words.intersection(label_words))
-                    if overlap == 0:
-                        l2_raw_sims[i] = 0.0
+                text_words = set(text.lower().split())
+                label_words = set(label.lower().split())
+                overlap = len(text_words.intersection(label_words))
+                if overlap > 0:
+                    l2_raw_sims[i] = min(1.0, l2_raw_sims[i] * (1.0 + (overlap * 0.15)))
+                else:
+                    l2_raw_sims[i] = l2_raw_sims[i] * 0.80
             
             for i in range(len(l2_raw_sims)):
                 if l2_raw_sims[i] < 0.85: # Threshold disesuaikan menjadi 0.85
@@ -286,16 +286,15 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
             # [FIXED] Menghapus Propagasi Layer 2 ke Layer 1 (+0.10)
             # Prediksi Layer 1 harus independen berdasar Dense Vector.
             
-            # [FIXED] SPARSE GATEKEEPER (Lexical Penalty)
-            # Mencegah Dimensional Collapse pada model 5D Logits di teks OOV ("halo halo badnung").
-            # Jika teks < 50 karakter dan tidak ada satupun irisan kata dengan label, skor dihanguskan.
+            # [FIXED] SOFT LEXICAL GATEKEEPER
             for i, label in enumerate(tax_layer1):
-                if len(text) < 50:
-                    text_words = set(text.lower().split())
-                    label_words = set(label.lower().split())
-                    overlap = len(text_words.intersection(label_words))
-                    if overlap == 0:
-                        l1_raw_sims[i] = 0.0
+                text_words = set(text.lower().split())
+                label_words = set(label.lower().split())
+                overlap = len(text_words.intersection(label_words))
+                if overlap > 0:
+                    l1_raw_sims[i] = min(1.0, l1_raw_sims[i] * (1.0 + (overlap * 0.15)))
+                else:
+                    l1_raw_sims[i] = l1_raw_sims[i] * 0.80
             
             for i in range(len(l1_raw_sims)):
                 if l1_raw_sims[i] < 0.85:
@@ -455,13 +454,15 @@ def predict():
         sim = get_cosine_similarity(doc_vector, lbl_vector)
         l2_raw_sims.append(sim)
         
-    # [FIXED] SPARSE GATEKEEPER
+    # [FIXED] SOFT LEXICAL GATEKEEPER
     for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
-        if len(text) < 50:
-            text_words = set(text.lower().split())
-            label_words = set(label.lower().split())
-            if len(text_words.intersection(label_words)) == 0:
-                l2_raw_sims[i] = 0.0
+        text_words = set(text.lower().split())
+        label_words = set(label.lower().split())
+        overlap = len(text_words.intersection(label_words))
+        if overlap > 0:
+            l2_raw_sims[i] = min(1.0, l2_raw_sims[i] * (1.0 + (overlap * 0.15)))
+        else:
+            l2_raw_sims[i] = l2_raw_sims[i] * 0.80
 
     for i in range(len(l2_raw_sims)):
         if l2_raw_sims[i] < 0.85:
@@ -485,13 +486,15 @@ def predict():
         
     # [FIXED] Menghapus propagasi hierarki di Layer 1.
     
-    # [FIXED] SPARSE GATEKEEPER
+    # [FIXED] SOFT LEXICAL GATEKEEPER
     for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
-        if len(text) < 50:
-            text_words = set(text.lower().split())
-            label_words = set(label.lower().split())
-            if len(text_words.intersection(label_words)) == 0:
-                l1_raw_sims[i] = 0.0
+        text_words = set(text.lower().split())
+        label_words = set(label.lower().split())
+        overlap = len(text_words.intersection(label_words))
+        if overlap > 0:
+            l1_raw_sims[i] = min(1.0, l1_raw_sims[i] * (1.0 + (overlap * 0.15)))
+        else:
+            l1_raw_sims[i] = l1_raw_sims[i] * 0.80
 
     for i in range(len(l1_raw_sims)):
         if l1_raw_sims[i] < 0.85:
