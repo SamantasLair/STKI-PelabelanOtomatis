@@ -1,5 +1,5 @@
 // State Globals
-let activeDatabaseType = 'utama';
+let activeDatabaseType = 'akademik';
 let alphaValue = 0.70;
 let selectedLabelName = '';
 
@@ -70,12 +70,9 @@ async function initStatus() {
         activeDatabaseType = data.db_type;
         
         // Update switcher buttons
-        if (activeDatabaseType === 'demo_real') {
-            document.getElementById('btn-db-utama').classList.remove('active');
-            document.getElementById('btn-db-demo').classList.add('active');
-        } else {
-            document.getElementById('btn-db-utama').classList.add('active');
-            document.getElementById('btn-db-demo').classList.remove('active');
+        const dbSelector = document.getElementById('db-selector');
+        if (dbSelector) {
+            dbSelector.value = activeDatabaseType;
         }
         
         // Update Rice Rule Stats
@@ -232,25 +229,18 @@ async function executeRecommendation() {
     docsContainer.innerHTML = `<div class="empty-state"><p>Mencari literatur...</p></div>`;
     
     try {
-        const response = await fetch('/api/search', {
+        const response = await fetch('/api/recommend', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: query, alpha: alphaValue })
+            body: JSON.stringify({ query: query, alpha: alphaValue, limit: 100, offset: 0 })
         });
         const docs = await response.json();
         
         dataContainer.innerHTML = '';
         docsContainer.innerHTML = '';
         
-        const dataFiles = docs.filter(d => {
-            const lower = d.filename.toLowerCase();
-            return lower.endsWith('.csv') || lower.endsWith('.xlsx');
-        });
-        
-        const docFiles = docs.filter(d => {
-            const lower = d.filename.toLowerCase();
-            return lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.txt');
-        });
+        const dataFiles = docs.data_files || [];
+        const docFiles = docs.doc_files || [];
         
         document.getElementById('count-reco-data').textContent = dataFiles.length;
         document.getElementById('count-reco-docs').textContent = docFiles.length;

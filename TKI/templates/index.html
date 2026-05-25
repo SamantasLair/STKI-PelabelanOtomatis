@@ -64,12 +64,14 @@
                     <div class="db-switcher-container">
                         <span class="switcher-label">DATABASE BERJALAN</span>
                         <div class="switcher-buttons">
-                            <button id="btn-db-utama" class="switcher-btn active" onclick="switchDatabase('utama')">
-                                UTAMA
-                            </button>
-                            <button id="btn-db-demo" class="switcher-btn" onclick="switchDatabase('demo_real')">
-                                DEMO REAL
-                            </button>
+                            <select id="db-selector" class="switcher-btn" style="padding: 8px 12px; font-family: inherit; font-weight: 600; border-radius: 6px; cursor: pointer; border: 1px solid var(--border-color); background-color: var(--card-bg); color: var(--text-color);" onchange="switchDatabase(this.value)">
+                                <option value="akademik">Akademik</option>
+                                <option value="politik">Politik</option>
+                                <option value="ekonomi">Ekonomi</option>
+                                <option value="bisnis">Peraturan Bisnis</option>
+                                <option value="etika">Peraturan Etika</option>
+                                <option value="demo_real">Demo Real Dataset</option>
+                            </select>
                         </div>
                     </div>
                 </div>

@@ -20,40 +20,95 @@ DB_REAL_PATH = os.path.join(ROOT_DIR, "academic_demo_real.db")
 app = Flask(__name__, template_folder=os.path.join(CURRENT_DIR, "templates"), static_folder=os.path.join(CURRENT_DIR, "static"))
 
 # State Sistem Aktif (Default)
-active_db_path = DB_PATH
-
-# Taksonomi Dinamis (Skenario Utama vs Demo Real)
-TAXONOMY_UTAMA = {
-    "Layer_1_Domain": ["Akademik Mahasiswa", "Administrasi Dosen", "Jadwal dan SKS Perkuliahan"],
-    "Layer_2_Detail": ["Transkrip Nilai Lengkap", "KRS SKS Kelas", "Daftar Dosen Pengajar", "Laporan Keuangan", "Kurikulum Jurusan"]
+active_db_type = "akademik"
+DB_PATHS = {
+    "akademik": os.path.join(ROOT_DIR, "academic_metadata.db"),
+    "demo_real": os.path.join(ROOT_DIR, "academic_demo_real.db"),
+    "politik": os.path.join(ROOT_DIR, "db_politik.db"),
+    "ekonomi": os.path.join(ROOT_DIR, "db_ekonomi.db"),
+    "bisnis": os.path.join(ROOT_DIR, "db_bisnis.db"),
+    "etika": os.path.join(ROOT_DIR, "db_etika.db")
 }
+active_db_path = DB_PATHS[active_db_type]
 
-TAXONOMY_DEMO = {
-    "Layer_1_Domain": ["Skripsi & Tugas Akhir", "Dataset & Publikasi Riset", "Jurnal & Artikel Ilmiah"],
-    "Layer_2_Detail": [
-        "Skripsi Informatika", "Skripsi Sistem Informasi", "Skripsi Teknik Komputer",
-        "Dataset Citra Medis", "Dataset Teks Indonesia", "Dataset Sensor IoT",
-        "Jurnal Sinta 1 Gold", "Jurnal Sinta 2 Silver", "Jurnal Sinta 3 Bronze",
-        "Artikel Konferensi IEEE", "Artikel Prosiding Nasional", "Laporan Pengabdian",
-        "Proposal Hibah Riset", "Monograf Buku Ajar", "Paten HAKI Terdaftar",
-        "Hak Cipta Software", "Desain Industri"
-    ]
+# Taksonomi Dinamis untuk 6 Database
+TAXONOMIES = {
+    "akademik": {
+        "Layer_1_Domain": ["Akademik Mahasiswa", "Administrasi Dosen", "Jadwal dan SKS Perkuliahan"],
+        "Layer_2_Detail": ["Transkrip Nilai Lengkap", "KRS SKS Kelas", "Daftar Dosen Pengajar", "Laporan Keuangan", "Kurikulum Jurusan"]
+    },
+    "politik": {
+        "Layer_1_Domain": ["Kebijakan Publik", "Pemilihan Umum", "Partai Politik"],
+        "Layer_2_Detail": ["RUU Pemilu", "Laporan Kampanye", "Debat Kandidat", "Regulasi Daerah", "Survei Elektabilitas"]
+    },
+    "ekonomi": {
+        "Layer_1_Domain": ["Makroekonomi", "Mikroekonomi", "Keuangan Internasional"],
+        "Layer_2_Detail": ["Laporan Inflasi", "Kebijakan Moneter", "Pasar Saham", "Analisis UMKM", "Nilai Tukar Mata Uang"]
+    },
+    "bisnis": {
+        "Layer_1_Domain": ["Hukum Perusahaan", "Pajak & Cukai", "Ketenagakerjaan"],
+        "Layer_2_Detail": ["Pendirian PT", "Pajak Pertambahan Nilai", "Kontrak Karyawan", "Izin Usaha", "Audit Keuangan"]
+    },
+    "etika": {
+        "Layer_1_Domain": ["Etika Profesi", "Integritas Korporat", "Hak Asasi Manusia"],
+        "Layer_2_Detail": ["Kode Etik Kedokteran", "Anti Korupsi", "Whistleblower", "Diskriminasi Tempat Kerja", "Perlindungan Data Pribadi"]
+    },
+    "demo_real": {
+        "Layer_1_Domain": ["Skripsi & Tugas Akhir", "Dataset & Publikasi Riset", "Jurnal & Artikel Ilmiah"],
+        "Layer_2_Detail": [
+            "Skripsi Informatika", "Skripsi Sistem Informasi", "Skripsi Teknik Komputer",
+            "Dataset Citra Medis", "Dataset Teks Indonesia", "Dataset Sensor IoT",
+            "Jurnal Sinta 1 Gold", "Jurnal Sinta 2 Silver", "Jurnal Sinta 3 Bronze",
+            "Artikel Konferensi IEEE", "Artikel Prosiding Nasional", "Laporan Pengabdian",
+            "Proposal Hibah Riset", "Monograf Buku Ajar", "Paten HAKI Terdaftar",
+            "Hak Cipta Software", "Desain Industri"
+        ]
+    }
 }
 
 TAXONOMY = {
-    "Layer_1_Domain": list(TAXONOMY_UTAMA["Layer_1_Domain"]),
-    "Layer_2_Detail": list(TAXONOMY_UTAMA["Layer_2_Detail"])
+    "Layer_1_Domain": list(TAXONOMIES[active_db_type]["Layer_1_Domain"]),
+    "Layer_2_Detail": list(TAXONOMIES[active_db_type]["Layer_2_Detail"])
 }
 
+# Peta turunan ke induk secara statik untuk UI dan Helper fallback
 CHILD_TO_PARENT_MAP = {
-    # Skenario Utama
+    # Akademik
     "Transkrip Nilai Lengkap": "Akademik Mahasiswa",
     "KRS SKS Kelas": "Akademik Mahasiswa",
-    "Daftar Dosen Pengajar": "Administrasi Dosen",
     "Laporan Keuangan": "Akademik Mahasiswa",
+    "Daftar Dosen Pengajar": "Administrasi Dosen",
     "Kurikulum Jurusan": "Jadwal dan SKS Perkuliahan",
     
-    # Skenario Demo Real
+    # Politik
+    "RUU Pemilu": "Pemilihan Umum",
+    "Laporan Kampanye": "Pemilihan Umum",
+    "Debat Kandidat": "Pemilihan Umum",
+    "Regulasi Daerah": "Kebijakan Publik",
+    "Survei Elektabilitas": "Partai Politik",
+    
+    # Ekonomi
+    "Laporan Inflasi": "Makroekonomi",
+    "Kebijakan Moneter": "Makroekonomi",
+    "Pasar Saham": "Keuangan Internasional",
+    "Nilai Tukar Mata Uang": "Keuangan Internasional",
+    "Analisis UMKM": "Mikroekonomi",
+    
+    # Bisnis
+    "Pendirian PT": "Hukum Perusahaan",
+    "Izin Usaha": "Hukum Perusahaan",
+    "Pajak Pertambahan Nilai": "Pajak & Cukai",
+    "Kontrak Karyawan": "Ketenagakerjaan",
+    "Audit Keuangan": "Pajak & Cukai",
+    
+    # Etika
+    "Kode Etik Kedokteran": "Etika Profesi",
+    "Anti Korupsi": "Integritas Korporat",
+    "Whistleblower": "Integritas Korporat",
+    "Diskriminasi Tempat Kerja": "Hak Asasi Manusia",
+    "Perlindungan Data Pribadi": "Hak Asasi Manusia",
+    
+    # Demo Real
     "Skripsi Informatika": "Skripsi & Tugas Akhir",
     "Skripsi Sistem Informasi": "Skripsi & Tugas Akhir",
     "Skripsi Teknik Komputer": "Skripsi & Tugas Akhir",
@@ -71,20 +126,6 @@ CHILD_TO_PARENT_MAP = {
     "Artikel Prosiding Nasional": "Jurnal & Artikel Ilmiah",
     "Laporan Pengabdian": "Jurnal & Artikel Ilmiah",
     "Monograf Buku Ajar": "Jurnal & Artikel Ilmiah",
-    
-    # UI Demo GUI
-    "Jurnal Ilmiah Sinta 2": "Publikasi Riset SINTA",
-    "Prosiding Konferensi IEEE": "Publikasi Riset SINTA",
-    "Jurnal Sinta 1 Gold": "Publikasi Riset SINTA",
-    "Jurnal Sinta 3 Silver": "Publikasi Riset SINTA",
-    "Prosiding Nasional": "Publikasi Riset SINTA",
-    "Monograf Buku Ajar": "Publikasi Riset SINTA",
-    "Reviewer Jurnal": "Publikasi Riset SINTA",
-    "Paten Sederhana": "Kekayaan Intelektual Paten",
-    "Laporan Luaran Riset": "Kekayaan Intelektual Paten",
-    "Abdimas Desa Binaan": "Pengabdian Masyarakat Abdimas",
-    "Pelatihan Masyarakat": "Pengabdian Masyarakat Abdimas",
-    "Proposal Riset Mandiri": "Pengabdian Masyarakat Abdimas"
 }
 
 # Inisialisasi ONNX Engine
@@ -257,17 +298,26 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 sim = get_cosine_similarity(emb, lbl_vector)
                 l2_raw_sims.append(sim)
                 
-            # [FIXED] SOFT LEXICAL GATEKEEPER
+            # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
+            stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
             for i, label in enumerate(tax_layer2):
                 text_words = set(text.lower().split())
                 label_words = set(label.lower().split())
-                overlap = len(text_words.intersection(label_words))
-                if overlap > 0:
+                
+                # Hitung bobot irisan, abaikan stop words
+                overlap_weight = 0.0
+                for w in text_words.intersection(label_words):
+                    if w not in stop_words:
+                        overlap_weight += 1.0
+                    else:
+                        overlap_weight += 0.05 # Penalti drastis untuk stop word
+                
+                if overlap_weight > 0.5:
                     # Tidak mem-boost secara agresif untuk mencegah saturasi 100%
                     # Hanya menjaga nilai Base Cosine Similarity murni
                     l2_raw_sims[i] = l2_raw_sims[i] * 1.0 
                 else:
-                    # Penalti bagi yang tidak ada irisan sama sekali agar gagal tembus threshold UI
+                    # Penalti bagi yang tidak ada irisan signifikan
                     l2_raw_sims[i] = l2_raw_sims[i] * 0.80
             
             for i in range(len(l2_raw_sims)):
@@ -289,12 +339,20 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
             # [FIXED] Menghapus Propagasi Layer 2 ke Layer 1 (+0.10)
             # Prediksi Layer 1 harus independen berdasar Dense Vector.
             
-            # [FIXED] SOFT LEXICAL GATEKEEPER
+            # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
+            stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
             for i, label in enumerate(tax_layer1):
                 text_words = set(text.lower().split())
                 label_words = set(label.lower().split())
-                overlap = len(text_words.intersection(label_words))
-                if overlap > 0:
+                
+                overlap_weight = 0.0
+                for w in text_words.intersection(label_words):
+                    if w not in stop_words:
+                        overlap_weight += 1.0
+                    else:
+                        overlap_weight += 0.05
+                        
+                if overlap_weight > 0.5:
                     l1_raw_sims[i] = l1_raw_sims[i] * 1.0
                 else:
                     l1_raw_sims[i] = l1_raw_sims[i] * 0.80
@@ -328,6 +386,24 @@ def index():
 
 @app.route("/api/status", methods=["GET"])
 def get_status():
+    global active_db_type, active_db_path, TAXONOMY
+    
+    # Buat DB jika belum ada
+    if not os.path.exists(active_db_path):
+        conn = sqlite3.connect(active_db_path)
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT UNIQUE,
+                content TEXT,
+                labels TEXT,
+                embedding TEXT
+            )
+        ''')
+        conn.commit()
+        conn.close()
+        
     conn = sqlite3.connect(active_db_path)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM documents")
@@ -350,12 +426,19 @@ def get_status():
             except:
                 pass
                 
-    db_name = "Utama (Akademik Kampus)" if active_db_path == DB_PATH else "Demo Real (Riset, Skripsi, Jurnal, Dataset)"
-    db_type = "utama" if active_db_path == DB_PATH else "demo_real"
+    db_names = {
+        "akademik": "Akademik Kampus",
+        "politik": "Politik & Regulasi",
+        "ekonomi": "Ekonomi Makro & Mikro",
+        "bisnis": "Peraturan Bisnis & Korporat",
+        "etika": "Etika & Hukum Hak Asasi",
+        "demo_real": "Demo Real (Riset & Jurnal)"
+    }
+    db_name = db_names.get(active_db_type, "Unknown Database")
     
     return jsonify({
         "active_db": db_name,
-        "db_type": db_type,
+        "db_type": active_db_type,
         "total_docs": total_docs,
         "optimal_labels_count": optimal_x,
         "actual_labels_count": len(unique_labels),
@@ -364,21 +447,20 @@ def get_status():
 
 @app.route("/api/switch_db", methods=["POST"])
 def switch_db():
-    global active_db_path, TAXONOMY
+    global active_db_type, active_db_path, TAXONOMY
     data = request.get_json()
-    target = data.get("db_type", "utama")
+    target = data.get("db_type", "akademik")
     
-    if target == "demo_real":
-        active_db_path = DB_REAL_PATH
-        TAXONOMY["Layer_1_Domain"] = list(TAXONOMY_DEMO["Layer_1_Domain"])
-        TAXONOMY["Layer_2_Detail"] = list(TAXONOMY_DEMO["Layer_2_Detail"])
-        if not os.path.exists(DB_REAL_PATH):
-            os.system(f'python "{os.path.join(CURRENT_DIR, "generate_real_demo.py")}"')
-    else:
-        active_db_path = DB_PATH
-        TAXONOMY["Layer_1_Domain"] = list(TAXONOMY_UTAMA["Layer_1_Domain"])
-        TAXONOMY["Layer_2_Detail"] = list(TAXONOMY_UTAMA["Layer_2_Detail"])
+    if target in TAXONOMIES:
+        active_db_type = target
+        active_db_path = DB_PATHS[target]
+        TAXONOMY["Layer_1_Domain"] = list(TAXONOMIES[target]["Layer_1_Domain"])
+        TAXONOMY["Layer_2_Detail"] = list(TAXONOMIES[target]["Layer_2_Detail"])
         
+        # Trigger real demo generation if it's demo_real and doesn't exist
+        if target == "demo_real" and not os.path.exists(active_db_path):
+            os.system(f'python "{os.path.join(CURRENT_DIR, "generate_real_demo.py")}"')
+            
     return jsonify({"status": "success", "message": f"Berhasil dialihkan ke Database {target.upper()}"})
 
 @app.route("/api/search", methods=["POST"])
@@ -394,8 +476,18 @@ def search():
     
     conn = sqlite3.connect(active_db_path)
     cursor = conn.cursor()
-    # Anti-OOM: Batasi pengambilan data masif ke maksimum 2500 dokumen agar BM25 on-the-fly tidak meledak
-    cursor.execute("SELECT filename, labels, content, embedding FROM documents LIMIT 2500")
+    
+    # [FIXED] Menghapus LIMIT 2500. Menggunakan SQL LIKE dinamis sebagai pre-filter
+    # Ini memastikan hanya dokumen yang berpotensi memiliki BM25 > 0 yang ditarik ke Memory,
+    # menyelamatkan OOM tanpa merusak akurasi global corpus.
+    query_words = query.lower().split()
+    if not query_words:
+        return jsonify([])
+        
+    conditions = " OR ".join(["content LIKE ?" for _ in query_words])
+    params = [f"%{w}%" for w in query_words]
+    
+    cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions}", params)
     rows_db = cursor.fetchall()
     conn.close()
     
@@ -440,6 +532,72 @@ def search():
     results = sorted(results, key=lambda x: x["similarity"], reverse=True)
     return jsonify(results[:15])  # Kembalikan top 15 dokumen terbaik
 
+@app.route("/api/recommend", methods=["POST"])
+def recommend():
+    # Endpoint khusus untuk Recommendation Engine dengan Server-Side Pagination
+    data = request.get_json()
+    query = data.get("query", "").strip()
+    alpha = float(data.get("alpha", 0.70))
+    limit = int(data.get("limit", 20))
+    offset = int(data.get("offset", 0))
+    
+    if not query:
+        return jsonify({"data_files": [], "doc_files": []})
+        
+    doc_vector = get_onnx_embedding(query)
+    query_words = query.lower().split()
+    conditions = " OR ".join(["content LIKE ?" for _ in query_words])
+    params = [f"%{w}%" for w in query_words]
+    
+    conn = sqlite3.connect(active_db_path)
+    cursor = conn.cursor()
+    # Pagination diterapkan langsung pada SQL DB
+    cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
+    rows_db = cursor.fetchall()
+    conn.close()
+    
+    if not rows_db:
+        return jsonify({"data_files": [], "doc_files": []})
+        
+    corpus = [row[2] for row in rows_db]
+    filenames = [row[0] for row in rows_db]
+    embeddings = [np.array(json.loads(row[3])) for row in rows_db]
+    
+    bm25 = BM25(corpus)
+    norm_bm25_scores = [1.0 - np.exp(-0.2 * bm25.get_score(query_words, i)) for i in range(len(corpus))]
+    
+    data_files = []
+    doc_files = []
+    
+    for i in range(len(rows_db)):
+        sparse_score = norm_bm25_scores[i]
+        if sparse_score <= 0.05:
+            continue
+            
+        dense_sim = get_cosine_similarity(doc_vector, embeddings[i])
+        hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
+        final_sim = max(0.0, min(1.0, hybrid_score)) * 100.0
+        
+        lower_name = filenames[i].lower()
+        doc_obj = {
+            "filename": filenames[i],
+            "similarity": float(final_sim)
+        }
+        
+        # Server-Side File Partitioning
+        if lower_name.endswith('.csv') or lower_name.endswith('.xlsx'):
+            data_files.append(doc_obj)
+        elif lower_name.endswith('.pdf') or lower_name.endswith('.docx') or lower_name.endswith('.txt'):
+            doc_files.append(doc_obj)
+            
+    data_files = sorted(data_files, key=lambda x: x["similarity"], reverse=True)
+    doc_files = sorted(doc_files, key=lambda x: x["similarity"], reverse=True)
+    
+    return jsonify({
+        "data_files": data_files,
+        "doc_files": doc_files
+    })
+
 @app.route("/api/predict", methods=["POST"])
 def predict():
     data = request.get_json()
@@ -457,12 +615,20 @@ def predict():
         sim = get_cosine_similarity(doc_vector, lbl_vector)
         l2_raw_sims.append(sim)
         
-    # [FIXED] SOFT LEXICAL GATEKEEPER
+    # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
+    stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
     for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
         text_words = set(text.lower().split())
         label_words = set(label.lower().split())
-        overlap = len(text_words.intersection(label_words))
-        if overlap > 0:
+        
+        overlap_weight = 0.0
+        for w in text_words.intersection(label_words):
+            if w not in stop_words:
+                overlap_weight += 1.0
+            else:
+                overlap_weight += 0.05
+                
+        if overlap_weight > 0.5:
             l2_raw_sims[i] = l2_raw_sims[i] * 1.0
         else:
             l2_raw_sims[i] = l2_raw_sims[i] * 0.80
@@ -489,12 +655,20 @@ def predict():
         
     # [FIXED] Menghapus propagasi hierarki di Layer 1.
     
-    # [FIXED] SOFT LEXICAL GATEKEEPER
+    # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
+    stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
     for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
         text_words = set(text.lower().split())
         label_words = set(label.lower().split())
-        overlap = len(text_words.intersection(label_words))
-        if overlap > 0:
+        
+        overlap_weight = 0.0
+        for w in text_words.intersection(label_words):
+            if w not in stop_words:
+                overlap_weight += 1.0
+            else:
+                overlap_weight += 0.05
+                
+        if overlap_weight > 0.5:
             l1_raw_sims[i] = l1_raw_sims[i] * 1.0
         else:
             l1_raw_sims[i] = l1_raw_sims[i] * 0.80

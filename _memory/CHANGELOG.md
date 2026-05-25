@@ -2,6 +2,19 @@
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 
+## [v4.2.0] - 2026-05-24
+### Added
+- **Multi-Domain Database Architect**: Mengganti dua tombol statis (*Utama* & *Demo Real*) pada antarmuka pengguna (`index.html`) menjadi sebuah *Dropdown Menu* yang secara otomatis melayani 6 cabang korpus independen (Akademik, Politik, Ekonomi, Peraturan Bisnis, Peraturan Etika, Demo Real Dataset). Sistem akan melakukan instansiasi file `.db` dan taksonomi yang berbeda secara dinamis.
+- **Injeksi Corpus Sintetis (Auto-Seeding)**: Menciptakan skrip `testing/seed_domain_dbs.py` yang berhasil menyuntikkan puluhan dokumen proksimal lengkap dengan vektor leksikalnya langsung ke dalam *database* Politik, Ekonomi, Bisnis, dan Etika. Ini memungkinkan GUI bisa langsung diuji coba.
+- **Transisi ke Skala Enterprise (Full-Text Retrieval)**: Menghapus batas artifisial (`content[:1000]`) pada naskah *seeding* Wikipedia Indonesia (`insert_and_test_indo.py`). Sistem kini secara agresif menyimpan teks asli sepenuhnya (*Full-Text*, ~15.000 kata per dokumen) alih-alih abstrak dangkal. Ini disokong oleh pertahanan ganda: *SQL Pre-Filtering* (anti-OOM) dan *TextRank* (anti-token truncation BERT). Bukti matematis didokumentasikan pada `_Fondasi/kepadatan_semantik_full_text.md`.
+- **Teori Skalabilitas Baru**: Pembuatan dokumen `_Fondasi/skalabilitas_database_stki.md` yang merincikan solusi matematika untuk *Memory Shrinkage* dan penanganan *OOM Killer*.
+- **Endpoint Pagination API**: Pembuatan endpoint khusus `/api/recommend` di `app_web.py` yang mendukung parameter `limit` dan `offset` untuk partisi data.
+
+### Fixed
+- **Pemusnahan Ancaman OOM (Out-of-Memory)**: Mencabut klausa statis `LIMIT 2500` pada `/api/search` `app_web.py`. Menggantinya dengan **SQL Dynamic Pre-Filtering** (`LIKE`) berdasarkan irisan kata kueri. Hal ini mencegah ekstraksi ribuan vektor ke RAM (*Python Heap*) untuk dokumen yang secara matematis tidak mungkin mendapat skor BM25 > 0.
+- **Penyembuhan Frontend Lag**: Memindahkan logika *Grid-2-Col file partitioning* (pemisahan `.csv` dan `.pdf`) dari skrip klien `main.js` ke pemrosesan *Server-Side* di `/api/recommend` `app_web.py`. Ini memangkas Payload JSON yang tidak relevan.
+- **Stop-Word Penalty pada Gatekeeper**: Mengganti perhitungan `overlap` mentah dengan sistem bobot pseudo-IDF. Kata hubung (*stop-words*) seperti "dan", "atau", "di" kini dipenalti menjadi bobot $0.05$ alih-alih $1.0$, mencegah bias *similarity* dokumen sampah yang hanya memiliki kesamaan preposisi.
+
 ## [v4.1.0] - 2026-05-22
 ### Added
 - Pembuatan folder `_memory/` (INDEX, DIARY, CHANGELOG) sesuai protokol ANTIGRAVITY v4.0.
