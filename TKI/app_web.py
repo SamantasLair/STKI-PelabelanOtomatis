@@ -190,10 +190,16 @@ def get_onnx_embedding(text):
     input_ids = inputs["input_ids"].astype(np.int64)
     attention_mask = inputs["attention_mask"].astype(np.int64)
     outputs = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})
-    # [FIXED] Mengembalikan Logits murni dari Dense Layer.
-    # Sigmoid menghancurkan jarak sudut antar vektor (membawa semua nilai ke kuadran positif sempit).
-    logits = outputs[0].squeeze()
-    return logits
+    
+    # [FIXED] Ekstraksi Embedding Menggunakan Mean Pooling (Standard Sentence-Transformers)
+    # Karena model yang di-export adalah base_model (feature extractor), outputnya adalah last_hidden_state (1, seq_len, hidden_size)
+    last_hidden_state = outputs[0]
+    attention_mask_expanded = np.expand_dims(attention_mask, axis=-1)
+    sum_embeddings = np.sum(last_hidden_state * attention_mask_expanded, axis=1)
+    sum_mask = np.clip(np.sum(attention_mask_expanded, axis=1), a_min=1e-9, a_max=None)
+    sentence_embedding = (sum_embeddings / sum_mask)[0]
+    
+    return sentence_embedding
 
 
 def init_onnx_engine():

@@ -113,7 +113,7 @@ import torch
 # Model ringan untuk efisiensi komputasi dan deployment (TKT 4)
 # Menggunakan pra-terlatih (pretrained) yang berukuran kecil untuk mempercepat konvergensi.
 # Referensi: Turc et al., 2019 (Well-Read Students Learn Better: On the Importance of Pre-training Compact Models)
-MODEL_CHECKPOINT = "prajjwal1/bert-mini"
+MODEL_CHECKPOINT = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 # Maximum sequence length: Dibutuhkan pemotongan teks karena arsitektur BERT memiliki limitasi 512 token.
 # Nilai 256 dipilih untuk menyeimbangkan retensi informasi abstrak jurnal (biasanya ~200 kata) dan memori GPU (VRAM).
@@ -262,7 +262,7 @@ def get_document_embedding(text):
     inputs = {k: v.to(device) for k, v in inputs.items()}
     
     with torch.no_grad():
-        outputs = model.bert(**inputs)
+        outputs = model.base_model(**inputs)
         # Ambil mean dari hidden states terakhir sebagai vektor representasi semantik
         embeddings = outputs.last_hidden_state.mean(dim=1).squeeze().cpu().numpy()
     return embeddings
@@ -798,20 +798,21 @@ dummy_input = {
     "input_ids": torch.zeros((1, MAX_LENGTH), dtype=torch.long).to(next(model.parameters()).device),
     "attention_mask": torch.zeros((1, MAX_LENGTH), dtype=torch.long).to(next(model.parameters()).device)
 }
-
+# Ekspor base_model (feature extractor) untuk mendapatkan last_hidden_state, bukan logits classifier
 torch.onnx.export(
-    model, 
-    (dummy_input["input_ids"], dummy_input["attention_mask"]), 
+    model.base_model,
+    (dummy_input["input_ids"], dummy_input["attention_mask"]),
     onnx_path,
-    input_names=["input_ids", "attention_mask"], 
-    output_names=["logits"],
+    export_params=True,
+    opset_version=14,
+    do_constant_folding=True,
+    input_names=["input_ids", "attention_mask"],
+    output_names=["last_hidden_state"],
     dynamic_axes={
-        "input_ids": {0: "batch_size"}, 
-        "attention_mask": {0: "batch_size"}, 
-        "logits": {0: "batch_size"}
-    },
-    opset_version=18,
-    do_constant_folding=True
+        "input_ids": {0: "batch_size", 1: "sequence_length"},
+        "attention_mask": {0: "batch_size", 1: "sequence_length"},
+        "last_hidden_state": {0: "batch_size", 1: "sequence_length"}
+    }
 )
 
 # Simpan tokenizer untuk kebutuhan deploy
