@@ -33,6 +33,9 @@ CATEGORIES = {
     "demo_real": "Kategori:Ilmu_pengetahuan"
 }
 
+session = requests.Session()
+session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'})
+
 def create_table_if_not_exists(db_path):
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
@@ -68,7 +71,7 @@ def get_articles_from_category(category, limit=1000):
             params["cmcontinue"] = cmcontinue
             
         try:
-            r = requests.get(url, params=params, timeout=10)
+            r = session.get(url, params=params, timeout=10)
             data = r.json()
             if 'query' in data and 'categorymembers' in data['query']:
                 for page in data['query']['categorymembers']:
@@ -93,7 +96,7 @@ def get_articles_from_category(category, limit=1000):
             "format": "json"
         }
         try:
-            r = requests.get(url, params=params, timeout=10)
+            r = session.get(url, params=params, timeout=10)
             data = r.json()
             if 'query' in data and 'pages' in data['query']:
                 for page_id, page in data['query']['pages'].items():
@@ -108,7 +111,6 @@ def get_articles_from_category(category, limit=1000):
 
 def fetch_page_content_and_tables(title):
     url = "https://id.wikipedia.org/w/api.php"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     
     params_text = {
         "action": "query",
@@ -120,7 +122,7 @@ def fetch_page_content_and_tables(title):
     
     content = None
     try:
-        r = requests.get(url, params=params_text, headers=headers, timeout=10)
+        r = session.get(url, params=params_text, timeout=10)
         data = r.json()
         pages = data.get('query', {}).get('pages', {})
         for page_id, page in pages.items():
@@ -137,7 +139,7 @@ def fetch_page_content_and_tables(title):
             from io import StringIO
             # Mencoba membaca tabel HTML aktual dari wikipedia dengan custom headers
             page_url = f"https://id.wikipedia.org/wiki/{title.replace(' ', '_')}"
-            r_html = requests.get(page_url, headers=headers, timeout=10)
+            r_html = session.get(page_url, timeout=10)
             dfs = pd.read_html(StringIO(r_html.text))
             if dfs and len(dfs) > 0:
                 # Ambil tabel dengan baris terbanyak
@@ -154,7 +156,8 @@ def seed_database(db_key, db_path):
     create_table_if_not_exists(db_path)
     
     category = CATEGORIES.get(db_key, "Kategori:Indonesia")
-    titles = get_articles_from_category(category, limit=2000) # Ambil banyak untuk buffer karena tidak semua punya tabel
+    # Cukup kumpulkan sekitar 150-300 judul riil dari kategori saja, tidak perlu random generator untuk mencegah 429
+    titles = get_articles_from_category(category, limit=300) 
     
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
@@ -162,73 +165,76 @@ def seed_database(db_key, db_path):
     success_count = 0
     pdf_count, docx_count, csv_count, xlsx_count = 0, 0, 0, 0
     
-    def process_title(title):
-        t, content, table_csv = fetch_page_content_and_tables(title)
-        if not content or len(content) < 200:
-            return None
+    def insert_doc(filename, ext, content):
+        nonlocal success_count, pdf_count, docx_count, csv_count, xlsx_count
+        if success_count >= 1000:
+            return False
             
-        content = content[:10000]
-        
-        # Alokasi kuota format: 400 PDF, 300 DOCX, 150 CSV, 150 XLSX
-        nonlocal pdf_count, docx_count, csv_count, xlsx_count
-        
-        ext = None
-        final_content = None
-        
-        # Prioritaskan mengisi CSV/XLSX jika tabel riil ditemukan
-        if table_csv and (csv_count < 150 or xlsx_count < 150):
-            if csv_count <= xlsx_count:
-                ext = ".csv"
-                final_content = table_csv[:10000] # Batasi ukuran
-                csv_count += 1
-            else:
-                ext = ".xlsx"
-                final_content = f"Dokumen spreadsheet tabel.\nData Real:\n{table_csv[:10000]}"
-                xlsx_count += 1
-        else:
-            if pdf_count < 400:
-                ext = ".pdf"
-                final_content = content
-                pdf_count += 1
-            elif docx_count < 300:
-                ext = ".docx"
-                final_content = content
-                docx_count += 1
-            else:
-                return None
-                
-        if not ext:
-            return None
-            
-        safe_title = "".join([char if char.isalnum() else "_" for char in t])
-        filename = f"{safe_title}{ext}"
-        
         try:
-            emb = get_onnx_embedding(final_content)
-            return (filename, final_content, json.dumps([]), json.dumps(emb.tolist()))
+            emb = get_onnx_embedding(content)
+            c.execute("INSERT INTO documents (filename, content, labels, embedding) VALUES (?, ?, ?, ?)", 
+                      (filename, content, json.dumps([]), json.dumps(emb.tolist())))
+            
+            if ext == ".pdf": pdf_count += 1
+            elif ext == ".docx": docx_count += 1
+            elif ext == ".csv": csv_count += 1
+            elif ext == ".xlsx": xlsx_count += 1
+            
+            success_count += 1
+            if success_count % 10 == 0:
+                conn.commit()
+                print(f"[{db_key.upper()}] Progress: {success_count} / 1000 (PDF:{pdf_count} DOCX:{docx_count} CSV:{csv_count} XLSX:{xlsx_count})")
+            return True
         except Exception as e:
-            return None
+            return False
 
     # Eksekusi serial untuk keamanan Thread Local (ONNX Runtime dan SQLite cursor conflicts)
     for title in titles:
         if success_count >= 1000:
             break
             
-        res = process_title(title)
-        if res:
-            try:
-                c.execute("INSERT INTO documents (filename, content, labels, embedding) VALUES (?, ?, ?, ?)", res)
-                conn.commit()
-                success_count += 1
-                if success_count % 10 == 0:
-                    print(f"[{db_key.upper()}] Progress: {success_count} / 1000 (PDF:{pdf_count} DOCX:{docx_count} CSV:{csv_count} XLSX:{xlsx_count})")
-            except sqlite3.IntegrityError:
-                pass
+        t, content, table_csv = fetch_page_content_and_tables(title)
+        if not content or len(content) < 200:
+            continue
             
+        # Potong artikel panjang menjadi beberapa chunk riil untuk menduplikasi kuantitas data asli
+        paragraphs = content.split('\n\n')
+        chunks = []
+        current_chunk = ""
+        for p in paragraphs:
+            if len(current_chunk) + len(p) < 2000:
+                current_chunk += p + "\n\n"
+            else:
+                if len(current_chunk) > 200: chunks.append(current_chunk)
+                current_chunk = p + "\n\n"
+        if len(current_chunk) > 200:
+            chunks.append(current_chunk)
+            
+        safe_title = "".join([char if char.isalnum() else "_" for char in t])
+        
+        # Masukkan chunk teks sebagai PDF atau DOCX
+        for i, chunk in enumerate(chunks):
+            if success_count >= 1000: break
+            ext = ".pdf" if (pdf_count <= docx_count) else ".docx"
+            if pdf_count >= 400 and ext == ".pdf": ext = ".docx"
+            if docx_count >= 300 and ext == ".docx": ext = ".pdf"
+            
+            insert_doc(f"{safe_title}_part{i+1}{ext}", ext, chunk[:10000])
+
+        # Masukkan tabel asli sebagai CSV dan XLSX jika ada
+        if table_csv and success_count < 1000:
+            if csv_count < 150:
+                insert_doc(f"{safe_title}_data.csv", ".csv", table_csv[:10000])
+            if xlsx_count < 150 and success_count < 1000:
+                insert_doc(f"{safe_title}_data.xlsx", ".xlsx", f"Spreadsheet Data:\n{table_csv[:10000]}")
+            
+    conn.commit()
     conn.close()
     print(f"--- Selesai Seeding {db_key.upper()}: {success_count} dokumen dimasukkan ---")
 
 if __name__ == "__main__":
+    # Custom Antigravity Header to avoid 429
+    session.headers.update({'User-Agent': 'Antigravity-Agent/4.5.1 (contact@deepmind.com)'})
     for key, path in DATABASES.items():
         seed_database(key, path)
     

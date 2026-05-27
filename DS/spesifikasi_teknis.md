@@ -5,14 +5,14 @@ Dokumen ini memuat justifikasi teoretis berbasis bukti (*evidence-based*) mengen
 
 ---
 
-## 1. Pemilihan Model: Mengapa Menggunakan BERT-Mini?
+## 1. Pemilihan Model: Mengapa Menggunakan MiniLM Multilingual?
 
-Kami menetapkan **`prajjwal1/bert-mini`** (Turc et al., 2019) sebagai model dasar pembelajaran. Pemilihan ini didasarkan pada argumen teoretis dan praktis berikut:
+Kami menetapkan **`paraphrase-multilingual-MiniLM-L12-v2`** (Sentence-Transformers) sebagai model dasar pembelajaran. Pemilihan ini didasarkan pada argumen teoretis dan praktis berikut (yang memicu transisi dari model indobert-mini sebelumnya):
 
-* **Efisiensi Komputasi & Latensi Rendah (Kebutuhan TKT 4):**
-  BERT-mini hanya memiliki **11,3 juta parameter** (dibandingkan dengan BERT-base yang memiliki 110 juta parameter). Hal ini membuat proses *fine-tuning* di Google Colab berjalan sangat cepat (kurang dari 5 menit) dan proses ekspor ke format **ONNX** menghasilkan ukuran berkas yang sangat kecil (~45 MB), sangat efisien untuk dijalankan di CPU lokal kampus secara offline pada tahap STKI (TKT 4).
+* **Ketahanan Semantik Multilingual & Latensi Rendah (Kebutuhan TKT 4):**
+  Model ini dirancang khusus untuk pencocokan makna (*Semantic Textual Similarity*) dan mendukung lebih dari 50 bahasa, termasuk Bahasa Indonesia. Model ini sangat tangguh terhadap typo atau penggunaan sinonim. Meskipun memiliki kemampuan SOTA (*State-of-the-Art*), proses ekspor ke format **ONNX** menghasilkan arsitektur yang ringan dan efisien untuk dijalankan di CPU lokal kampus secara offline pada tahap STKI (TKT 4).
 * **Dual-Utility (Klasifikasi & Representasi Vektor):**
-  Selain bertindak sebagai classifier multi-label, model ini mampu mengekstrak *pooled embeddings* (vektor dimensi 256) dari lapisan tersembunyinya. Vektor representasi semantik ini sangat kaya akan makna kontekstual yang digunakan untuk mengaktifkan fitur pencarian semantik (STKI) dan klasifikasi dinamis.
+  Selain bertindak sebagai classifier multi-label, model ini mampu mengekstrak *pooled embeddings* (vektor berdimensi 384 melalui *Mean Pooling*) dari lapisan tersembunyinya. Vektor representasi semantik ini sangat kaya akan makna kontekstual yang digunakan untuk mengaktifkan fitur pencarian semantik (STKI) dan klasifikasi dinamis.
 
 ---
 
@@ -30,7 +30,7 @@ Untuk menghindari penggunaan data sintetis/buatan yang kurang representatif atau
 
 Untuk mengatasi keterbatasan model klasifikasi terbimbing (*supervised*) yang labelnya terkunci setelah dilatih, kami menerapkan arsitektur **Hybrid Zero-Shot Classification**:
 
-1. **Model BERT** dilatih di Colab menggunakan dataset ArXiv untuk menguasai representasi semantik bahasa.
+1. **Model MiniLM** dilatih di Colab menggunakan dataset ArXiv untuk menguasai representasi semantik bahasa.
 2. Ketika berkas baru (misal: PDF/CSV civitas akademika) diunggah saat presentasi, model mengekstrak **vektor embedding** dari teks dokumen tersebut.
 3. Pengguna memasukkan kata kunci label kampus apa saja secara dinamis (`["Administrasi", "Laporan Nilai", "Skripsi"]`).
 4. Sistem menghitung tingkat kedekatan semantik (**Cosine Similarity**) antara vektor dokumen dengan vektor label dinamis tersebut.

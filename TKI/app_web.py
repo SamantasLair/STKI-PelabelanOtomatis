@@ -81,9 +81,7 @@ def log_error(system_name, error_msg, exc=None):
 
 # Inisialisasi ONNX Engine
 import onnxruntime as ort
-os.environ["TRANSFORMERS_VERBOSITY"] = "error"
-os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-from transformers import AutoTokenizer
+from tokenizers import Tokenizer
 
 session = None
 tokenizer = None
@@ -135,11 +133,12 @@ def get_onnx_embedding(text):
     if session is None or tokenizer is None:
         return np.zeros(5)
     distilled_text = extract_key_sentences(text, num_sentences=5)
-    # [FIXED] IndoBERT sangat sensitif huruf kapital dan sering menganggapnya [UNK].
-    # Text harus diturunkan menjadi lowercase sebelum masuk tokenizer.
-    inputs = tokenizer(distilled_text.lower(), return_tensors="np", padding="max_length", truncation=True, max_length=256)
-    input_ids = inputs["input_ids"].astype(np.int64)
-    attention_mask = inputs["attention_mask"].astype(np.int64)
+    
+    # Encode with tokenizers (fast rust implementation)
+    encoded = tokenizer.encode(distilled_text.lower())
+    input_ids = np.array([encoded.ids], dtype=np.int64)
+    attention_mask = np.array([encoded.attention_mask], dtype=np.int64)
+    
     outputs = session.run(None, {"input_ids": input_ids, "attention_mask": attention_mask})
     
     # [FIXED] Ekstraksi Embedding Menggunakan Mean Pooling (Standard Sentence-Transformers)
@@ -159,7 +158,9 @@ def init_onnx_engine():
         return False
     try:
         session = ort.InferenceSession(ONNX_FILE, providers=['CPUExecutionProvider'])
-        tokenizer = AutoTokenizer.from_pretrained(ONNX_DIR)
+        tokenizer = Tokenizer.from_file(os.path.join(ONNX_DIR, "tokenizer.json"))
+        tokenizer.enable_padding(length=256)
+        tokenizer.enable_truncation(max_length=256)
         return True
     except Exception as e:
         print(f"Error loading ONNX engine: {e}")

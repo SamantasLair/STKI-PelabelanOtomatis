@@ -5,3 +5,14 @@ Traceback (most recent call last):
     cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
 sqlite3.OperationalError: Expression tree is too large (maximum depth 1000)
 
+[2026-05-27 18:35:23] [SYSTEM: Recommend API] ERROR: Gagal menarik rekomendasi: shapes (384,) and (5,) not aligned: 384 (dim 0) != 5 (dim 0)
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 573, in recommend
+    dense_sim = get_cosine_similarity(doc_vector, embeddings[i])
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 179, in get_cosine_similarity
+    return float(np.dot(v1, v2) / (norm_v1 * norm_v2))
+                 ^^^^^^^^^^^^^^
+ValueError: shapes (384,) and (5,) not aligned: 384 (dim 0) != 5 (dim 0)
+

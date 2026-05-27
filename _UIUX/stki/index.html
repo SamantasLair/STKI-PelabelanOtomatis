@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STKI - Ruang Pencari</title>
+    <link href="https://fonts.googleapis.com/css2?family=Georgia&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/css/variables.css">
+    <link rel="stylesheet" href="/shared/css/layout.css">
+    <link rel="stylesheet" href="/shared/css/components.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header" style="background-color: var(--color-ink); color: var(--color-paper);">
+                <h1 style="color: var(--color-paper);">STKI WORKSPACE</h1>
+                <div style="font-family: var(--font-mono); font-size: 0.65rem; margin-top: 4px;">END-USER TERMINAL</div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a class="nav-item active" data-target="view-search">I. Pencarian Hibrida</a>
+                <a class="nav-item" data-target="view-ingest">II. Unggah Arsip (Ingesti)</a>
+                <a class="nav-item" data-target="view-recommendation">III. Rekomendasi Terkait</a>
+                <a href="/ds" class="nav-item" style="color: var(--color-warn); margin-top: auto; border-top: 1px solid var(--color-border);">[SWITCH TO DS COMMAND CENTER]</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div id="status-engine">ENGINE: OFFLINE</div>
+                <div id="status-model">MODEL: SOTA MINILM L-12</div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-telemetry">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">DATABASE:</span>
+                        <select id="select-db" class="telemetry-value" style="width:auto; padding:2px 4px;">
+                            <option value="akademik">AKADEMIK</option>
+                            <option value="politik">POLITIK</option>
+                            <option value="ekonomi">EKONOMI</option>
+                            <option value="bisnis">BISNIS</option>
+                            <option value="etika">ETIKA</option>
+                            <option value="demo_real">DEMO REAL</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="topbar-telemetry">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">ALPHA FUSION:</span>
+                        <input type="number" id="input-alpha" value="0.70" step="0.05" min="0" max="1" style="width: 70px; padding: 2px 4px;">
+                    </div>
+                </div>
+            </header>
+
+            <div class="workspace">
+                
+                <!-- View 1: Search -->
+                <section id="view-search" class="tab-pane active">
+                    <div class="search-controls">
+                        <input type="text" id="input-search-query" placeholder="Masukkan kueri indeks pencarian...">
+                        <button class="btn btn-primary" id="btn-search">EKSEKUSI PENCARIAN</button>
+                    </div>
+
+                    <div class="ledger-box">
+                        <div class="ledger-header">
+                            <span>HASIL PENCARIAN PANGKALAN DATA</span>
+                            <span id="search-telemetry" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal; color: var(--color-ink-muted);"></span>
+                        </div>
+                        <div class="ledger-body" id="search-results">
+                            <div class="empty-state">MASUKKAN KUERI UNTUK MEMULAI PENARIKAN DATA</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 2: Ingest / Upload -->
+                <section id="view-ingest" class="tab-pane">
+                    <div class="grid-2">
+                        <div class="ledger-box">
+                            <div class="ledger-header">UNGGAH DOKUMEN BARU</div>
+                            <div class="ledger-body">
+                                <p style="font-family: var(--font-mono); font-size: 0.85rem; margin-bottom: var(--spacing-md);">
+                                    Sistem akan mengekstrak teks, menghitung vektor ONNX 384D, memberikan label otomatis berdasarkan Taksonomi K-Means saat ini, dan menyimpannya ke Database aktif.
+                                </p>
+                                <div class="file-drop-area" id="ingest-file-drop">
+                                    <span id="ingest-file-label">Klik atau Seret Dokumen ke Sini (PDF/DOCX/CSV)</span>
+                                    <input type="file" id="input-file-ingest" accept=".pdf,.docx,.txt,.csv,.xlsx">
+                                </div>
+                                <button class="btn btn-primary btn-block" id="btn-ingest">PROSES & SIMPAN KE DB</button>
+                            </div>
+                        </div>
+                        <div class="ledger-box">
+                            <div class="ledger-header">TERMINAL INGESTI</div>
+                            <div class="ledger-body">
+                                <div id="ingest-terminal" class="terminal-progress" style="padding: var(--spacing-sm); background: var(--color-bg); border: 1px solid var(--color-border); height: 200px; overflow-y: auto;">
+                                    [MENUNGGU DOKUMEN]
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 3: Recommendation -->
+                <section id="view-recommendation" class="tab-pane">
+                    <div class="search-controls" style="flex-direction: column;">
+                        <div style="display: flex; gap: var(--spacing-md); width: 100%;">
+                            <input type="text" id="input-reco-query" placeholder="Ketik topik profil/proyek untuk sinkronisasi rekomendasi...">
+                            <button class="btn btn-primary" id="btn-recommend">TARIK REKOMENDASI</button>
+                        </div>
+                        <div class="file-drop-area" id="reco-file-drop" style="width: 100%;">
+                            <span id="reco-file-label">Atau unggah dokumen (PDF/DOCX/CSV) untuk mencari literatur yang serupa dengan isi file tersebut...</span>
+                            <input type="file" id="input-reco-file" accept=".pdf,.docx,.txt,.csv,.xlsx">
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="ledger-box">
+                            <div class="ledger-header">
+                                <span>DATASET (.CSV/.XLSX)</span>
+                                <span id="reco-data-count" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">0 DITEMUKAN</span>
+                            </div>
+                            <div class="ledger-body" id="reco-data-results">
+                                <div class="empty-state">MENUNGGU KUERI...</div>
+                            </div>
+                        </div>
+                        <div class="ledger-box">
+                            <div class="ledger-header">
+                                <span>LITERATUR (.PDF/.DOCX)</span>
+                                <span id="reco-docs-count" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">0 DITEMUKAN</span>
+                            </div>
+                            <div class="ledger-body" id="reco-docs-results">
+                                <div class="empty-state">MENUNGGU KUERI...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Shared JS -->
+    <script src="/shared/js/apiService.js"></script>
+    <script src="/shared/js/uiHelpers.js"></script>
+    
+    <!-- STKI MVVM -->
+    <script src="/stki/js/views/searchView.js"></script>
+    <script src="/stki/js/views/recommendView.js"></script>
+    <script src="/stki/js/views/ingestView.js"></script>
+    
+    <script src="/stki/js/viewmodels/searchVM.js"></script>
+    <script src="/stki/js/viewmodels/recommendVM.js"></script>
+    <script src="/stki/js/viewmodels/ingestVM.js"></script>
+    
+    <script src="/stki/js/app.js"></script>
+</body>
+</html>

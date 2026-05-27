@@ -1,5 +1,5 @@
 # Rencana Implementasi: Sistem Kecerdasan Dokumen Akademik
-**Tahapan Eksperimen: TKT 3 (Data Science) & Persiapan TKT 4 (STKI)**
+**Tahapan Eksperimen: SELESAI TKT 3 (Data Science) -> MEMASUKI TKT 4 (Integrasi STKI & Deployment Offline)**
 
 Dokumen ini menjelaskan peta jalan (roadmap), alur data, serta rencana integrasi sistem klasifikasi multi-label, pencarian semantik (STKI), dan sistem transformasi dokumen otomatis untuk civitas akademika.
 
@@ -7,19 +7,27 @@ Dokumen ini menjelaskan peta jalan (roadmap), alur data, serta rencana integrasi
 
 ## 1. Roadmap Sistem & Alur Kerja Utama
 
-Sistem ini dirancang untuk menyelesaikan masalah manajemen dokumen di lingkungan kampus (civitas akademika). Alur kerja sistem terbagi menjadi tiga tahapan fungsional utama yang saling terhubung:
+Sistem ini dirancang untuk menyelesaikan masalah manajemen dokumen di lingkungan kampus (civitas akademika). Saat ini kita telah menyelesaikan **Tahap 1 (Data Science)** dan masuk ke **Tahap 2 (Deployment Backend/Frontend)**.
 
 ```mermaid
 graph TD
-    A[Dokumen Akademik Mentah: PDF/DOCX/CSV/XLSX] --> B[Modul 1: File Parsing & Text Extraction]
-    B --> C[Modul 2: Hybrid Labeling & Embedding Generation]
-    C --> D[Model BERT-Mini]
-    D -->|1. Vektor Makna| E[Modul 3: SQLite Database & Metadata Store]
-    D -->|2. Prediksi Kategori| E
-    E --> F{Fitur Sistem yang Ditawarkan}
-    F -->|Fitur 1| G[Simpan & Labeli: Database + Metadata & Tag Terintegrasi]
-    F -->|Fitur 2| H[Carikan Materi: STKI Semantic Cosine Search]
-    F -->|Fitur 3| I[Jadikan ke yang Lain: Smart Data Transformer Pandas]
+    subgraph Tahap1 ["Tahap 1: TKT 3 Data Science (SELESAI)"]
+        A1[Dataset Mentah] --> B1[Fine-Tuning BERT/MiniLM]
+        B1 --> C1[Evaluasi Metrik MAP/NDCG]
+        C1 --> D1[Export ke multi_label_model.onnx]
+    end
+
+    subgraph Tahap2 ["Tahap 2: TKT 4 Integrasi STKI (FOKUS SAAT INI)"]
+        A[Dokumen Upload User: PDF/DOCX/CSV] --> B[Modul 1: File Parsing & Text Extraction]
+        B --> C[Inference Engine: ONNX Runtime CPU]
+        D1 -.->|Load Weights| C
+        C -->|Dense Vector & Prediksi| E[Modul Hybrid Fusion & BM25]
+        E --> F[SQLite Database & Metadata Store]
+        F --> G{Fitur Sistem GUI/Web}
+        G -->|Fitur 1| H[Label Maker & Leaderboard]
+        G -->|Fitur 2| I[STKI Semantic Cosine Search]
+        G -->|Fitur 3| J[Smart Data Transformer Pandas]
+    end
 ```
 
 ---

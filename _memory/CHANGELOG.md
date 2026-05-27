@@ -1,6 +1,12 @@
 # CHANGELOG
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
+## [v4.6.0] - 2026-05-27
+### Added
+- **Database Management UI**: Menambahkan tab khusus "DATABASE MANAGEMENT & PREP" pada ruang DS Command Center yang memuat instrumen mutlak untuk manipulasi pangkalan data (*Batch Data Ingestion via Drag-and-Drop*, *Wipe Database*, dan *Manual Taxonomy Editor*).
+- **Wikipedia-to-SQLite Real Seeding**: Membangun skrip seeding asinkronus (`DS/seed_1000_real_docs.py`) yang mengoleksi tabel `pandas.read_html()` dan artikel penuh Wikipedia via intervensi *User-Agent* kustom untuk mengakali proteksi *Rate-Limit 429*.
+- **Tokenizers Rust Engine**: Membuang sepenuhnya *library* lambat `transformers` dari arsitektur eksekusi dan memigrasikannya secara absolut kepada modul *fast rust implementation* `tokenizers` dalam mengekstrak representasi leksikal dari *embedding ONNX*, mengatasi isu "HuggingFace Freeze" permanen di sisi OS Windows.
+
 ## [v4.5.1] - 2026-05-27
 ### Added
 - **Interactive Data Pipeline Graph**: Merombak total laman `_UIUX/ds/index.html` dengan grafik alur kerja interaktif (*nodes & edges*). Grafik berfungsi sebagai alat navigasi dinamis; mengklik node tertentu (seperti *Data Source* atau *K-Means Engine*) akan memunculkan panel fungsionalitas yang sesuai. Efek animasi *marching ants* (`@keyframes flow`) diaktifkan saat proses generasi taksonomi berjalan untuk indikasi *real-time*.

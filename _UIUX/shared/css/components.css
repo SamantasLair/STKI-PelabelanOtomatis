@@ -1,0 +1,307 @@
+/* _UIUX/css/components.css */
+
+/* Forms & Inputs */
+input, select, textarea {
+    font-family: var(--font-body);
+    font-size: 14px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: var(--border-width-thick) solid var(--color-border);
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    border-radius: var(--border-radius);
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+input:focus, select:focus, textarea:focus {
+    border-color: var(--color-ink);
+    background-color: #fff;
+}
+
+/* Buttons */
+.btn {
+    display: inline-block;
+    font-family: var(--font-body);
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border: var(--border-width-thick) solid var(--color-border);
+    background-color: var(--color-bg);
+    color: var(--color-ink);
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: background-color 0.2s, color 0.2s;
+    letter-spacing: 0.5px;
+}
+
+.btn-primary {
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+}
+
+.btn-primary:hover {
+    background-color: #333;
+}
+
+.btn-secondary:hover {
+    background-color: var(--color-highlight);
+}
+
+.btn-danger {
+    background-color: var(--color-danger);
+    color: var(--color-paper);
+    border-color: var(--color-danger);
+}
+
+.btn-danger:hover {
+    background-color: #6a1a1a;
+}
+
+.btn-block {
+    width: 100%;
+    display: block;
+}
+
+/* Ledger Table / List */
+.ledger-box {
+    border: var(--border-width-thick) solid var(--color-border);
+    background-color: var(--color-paper);
+    margin-bottom: var(--spacing-md);
+}
+
+.ledger-header {
+    background-color: var(--color-bg);
+    border-bottom: var(--border-width-thick) solid var(--color-border);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-family: var(--font-heading);
+    font-size: 1.1rem;
+    font-weight: bold;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ledger-body {
+    padding: var(--spacing-md);
+}
+
+.ledger-row {
+    display: flex;
+    padding: var(--spacing-sm) 0;
+    border-bottom: var(--border-width-thin) dashed var(--color-border-light);
+}
+
+.ledger-row:last-child {
+    border-bottom: none;
+}
+
+.row-col {
+    padding: 0 var(--spacing-sm);
+}
+
+.col-rank {
+    width: 50px;
+    font-family: var(--font-mono);
+    font-weight: bold;
+    color: var(--color-ink-muted);
+}
+
+.col-main {
+    flex: 1;
+}
+
+.col-score {
+    width: 250px;
+    font-family: var(--font-mono);
+    text-align: right;
+    font-size: 0.85rem;
+}
+
+.doc-title {
+    font-weight: bold;
+    margin-bottom: var(--spacing-xs);
+}
+
+.doc-snippet {
+    font-size: 0.85rem;
+    color: var(--color-ink-muted);
+}
+
+.tag-list {
+    display: flex;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-xs);
+}
+
+.tag {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    text-transform: uppercase;
+}
+
+/* Progress / Telemetry Bar */
+.telemetry-bar-container {
+    width: 100%;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg);
+    height: 12px;
+    position: relative;
+    margin-top: 4px;
+}
+
+.telemetry-bar-fill {
+    height: 100%;
+    background-color: var(--color-ink);
+}
+
+.search-controls {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.search-controls input {
+    flex: 1;
+}
+
+.empty-state {
+    text-align: center;
+    padding: var(--spacing-xl);
+    color: var(--color-ink-muted);
+    font-family: var(--font-mono);
+    border: 1px dashed var(--color-border-light);
+}
+
+.terminal-progress {
+    font-family: var(--font-mono);
+    white-space: pre;
+    font-size: 14px;
+    line-height: 1.2;
+}
+
+/* =========================================
+   NEW: INTERACTIVE PIPELINE GRAPH (DS)
+   ========================================= */
+.pipeline-graph {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-lg) 0;
+    margin-bottom: var(--spacing-lg);
+    overflow-x: auto;
+}
+
+.pipeline-node {
+    background-color: var(--color-paper);
+    border: var(--border-width-thick) solid var(--color-ink);
+    border-radius: var(--border-radius);
+    padding: var(--spacing-md);
+    text-align: center;
+    width: 160px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 2px 2px 0 var(--color-ink);
+}
+
+.pipeline-node:hover {
+    transform: translateY(-2px);
+    box-shadow: 4px 4px 0 var(--color-ink);
+    background-color: #fdfbf7;
+}
+
+.pipeline-node.active-node {
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+    box-shadow: 4px 4px 0 var(--color-highlight);
+}
+
+.pipeline-icon {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-xs);
+    font-family: var(--font-mono);
+}
+
+.pipeline-label {
+    font-family: var(--font-heading);
+    font-weight: bold;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+}
+
+/* The connecting dashed line */
+.pipeline-edge {
+    flex: 1;
+    height: 4px;
+    background: repeating-linear-gradient(to right, var(--color-ink) 0, var(--color-ink) 10px, transparent 10px, transparent 20px);
+    margin: 0 var(--spacing-sm);
+    position: relative;
+    opacity: 0.5;
+}
+
+/* Marching ants animation for active data flow */
+@keyframes flow {
+    from { background-position: 0 0; }
+    to { background-position: 40px 0; }
+}
+
+.pipeline-edge.active {
+    opacity: 1;
+    background: repeating-linear-gradient(to right, var(--color-highlight) 0, var(--color-highlight) 10px, transparent 10px, transparent 20px);
+    animation: flow 1s linear infinite;
+}
+
+/* =========================================
+   NEW: ACCORDION (DATABASE EXPLORER)
+   ========================================= */
+.accordion-row {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.accordion-row:hover {
+    background-color: var(--color-bg);
+}
+
+.accordion-content {
+    display: none;
+    padding: var(--spacing-md);
+    background-color: #faf9f6;
+    border-top: 1px dashed var(--color-border-light);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    color: #444;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.accordion-row.open .accordion-content {
+    display: block;
+}
+
+/* =========================================
+   NEW: FILE UPLOAD DROP AREA
+   ========================================= */
+.file-drop-area {
+    border: 2px dashed var(--color-border);
+    padding: var(--spacing-lg);
+    text-align: center;
+    background-color: var(--color-bg);
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: var(--font-mono);
+    margin-bottom: var(--spacing-md);
+}
+
+.file-drop-area:hover, .file-drop-area.dragover {
+    background-color: var(--color-paper);
+    border-color: var(--color-ink);
+}
+
+.file-drop-area input[type="file"] {
+    display: none;
+}

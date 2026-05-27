@@ -98,8 +98,13 @@ def evaluate_system():
                 lbl = []
             labels_list.append(lbl)
             
-        embeddings = [np.array(json.loads(r[4])) for r in rows]
-        print(f"     [+] {len(rows)} dokumen noise termuat ({time.time()-start_time:.2f} detik)")
+        embeddings = []
+        for r in rows:
+            emb_arr = np.array(json.loads(r[4]))
+            if emb_arr.shape[0] != 384:
+                emb_arr = get_onnx_embedding(r[3])
+            embeddings.append(emb_arr)
+        print(f"     [+] {len(rows)} dokumen termuat ({time.time()-start_time:.2f} detik)")
         
         # 2. Build BM25
         bm25 = BM25(corpus_texts)

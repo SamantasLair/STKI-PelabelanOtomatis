@@ -117,12 +117,12 @@ MODEL_CHECKPOINT = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 # Maximum sequence length: Dibutuhkan pemotongan teks karena arsitektur BERT memiliki limitasi 512 token.
 # Nilai 256 dipilih untuk menyeimbangkan retensi informasi abstrak jurnal (biasanya ~200 kata) dan memori GPU (VRAM).
-MAX_LENGTH = 256
+MAX_LENGTH = 128
 
 # Batch Size: Berdampak langsung pada gradien estimasi. 
 # 32 sangat direkomendasikan pada fine-tuning BERT base/mini untuk menghindari stochastic noise tinggi.
 # Referensi: Devlin et al., 2018 (BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding)
-BATCH_SIZE = 32
+BATCH_SIZE = 4
 
 # Learning Rate: Untuk fine-tuning Transformer, learning rate yang terlalu tinggi merusak (catastrophic forgetting) pre-trained weights.
 # Rentang optimal yang dibuktikan di makalah BERT adalah 2e-5, 3e-5, atau 5e-5.
@@ -798,9 +798,41 @@ dummy_input = {
     "input_ids": torch.zeros((1, MAX_LENGTH), dtype=torch.long).to(next(model.parameters()).device),
     "attention_mask": torch.zeros((1, MAX_LENGTH), dtype=torch.long).to(next(model.parameters()).device)
 }
-# Ekspor base_model (feature extractor) untuk mendapatkan last_hidden_state, bukan logits classifier
+# --- SURGICAL FIX: Bypass Bug SDPA Transformers v4.46+ pada PyTorch Tracer ---
+# Patch ini memaksa BERT menggunakan standar mask 4D ketimbang sdpa_mask yang memecah JIT Tracer
+def onnx_friendly_create_attention_masks(*args, **kwargs):
+    self = args[0]
+    attention_mask = args[1] if len(args) > 1 else kwargs.get('attention_mask')
+    extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+    extended_attention_mask = extended_attention_mask.to(dtype=self.dtype)
+    extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+    return extended_attention_mask, None
+
+import types
+model.base_model._create_attention_masks = types.MethodType(onnx_friendly_create_attention_masks, model.base_model)
+# -----------------------------------------------------------------------------
+
+# Ekspor base_model dengan Wrapper untuk menghindari error JIT tracing (got multiple values for argument 'use_cache')
+class ONNXExportWrapper(torch.nn.Module):
+    def __init__(self, base_model):
+        super().__init__()
+        self.base_model = base_model
+        
+    def forward(self, input_ids, attention_mask):
+        # Force kwargs to bypass PyTorch positional tracer bugs on HF Models
+        # Set return_dict=False to prevent "tuple index out of range" during PyTorch JIT tracing
+        outputs = self.base_model(
+            input_ids=input_ids, 
+            attention_mask=attention_mask,
+            return_dict=False
+        )
+        # outputs[0] corresponds to the last_hidden_state
+        return outputs[0]
+
+export_model = ONNXExportWrapper(model.base_model).cpu()
+
 torch.onnx.export(
-    model.base_model,
+    export_model,
     (dummy_input["input_ids"], dummy_input["attention_mask"]),
     onnx_path,
     export_params=True,

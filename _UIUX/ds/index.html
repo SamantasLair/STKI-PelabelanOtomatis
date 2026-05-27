@@ -138,18 +138,72 @@
 
                 </section>
 
-                <!-- View 2: Distribusi & Prep Data -->
+                <!-- View 2: Database Management & Prep -->
                 <section id="view-prep" class="tab-pane">
-                    <div class="ledger-box">
-                        <div class="ledger-header">DISTRIBUSI KELAS & KESIAPAN DATA (COMING SOON)</div>
-                        <div class="ledger-body" style="height: 400px; display: flex; align-items: center; justify-content: center; background-color: var(--color-bg);">
-                            <div style="font-family: var(--font-mono); font-size: 1.2rem; color: var(--color-ink-muted); text-align: center;">
-                                <div style="font-size: 3rem; margin-bottom: 20px;">📊</div>
-                                Modul Analisis Distribusi Data sedang dalam tahap pengembangan.<br>
-                                Akan menampilkan grafik persebaran dokumen per kategori.
+                    
+                    <!-- Top Area: Batch Upload & DB Control -->
+                    <div style="display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-md);">
+                        <!-- Left: Batch Upload -->
+                        <div class="ledger-box" style="flex: 2;">
+                            <div class="ledger-header">BATCH DATA INGESTION (DRAG & DROP)</div>
+                            <div class="ledger-body">
+                                <div id="dropzone" style="border: 2px dashed var(--color-border); padding: 40px; text-align: center; cursor: pointer; background-color: var(--color-bg); transition: all 0.3s;">
+                                    <div style="font-size: 2rem; margin-bottom: 10px;">📁</div>
+                                    <div style="font-family: var(--font-mono); font-size: 0.9rem;">
+                                        TARIK DAN LEPAS (DRAG & DROP) DOKUMEN DI SINI<br>
+                                        <span style="color: var(--color-ink-muted); font-size: 0.8rem;">Mendukung PDF, DOCX, CSV, XLSX</span>
+                                    </div>
+                                    <input type="file" id="batch-file-input" multiple style="display: none;" accept=".pdf,.docx,.csv,.xlsx">
+                                </div>
+                                <div id="upload-progress" class="terminal-progress" style="display: none; margin-top: 10px; padding: 10px; background: var(--color-bg); font-size: 0.8rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Danger Zone -->
+                        <div class="ledger-box" style="flex: 1;">
+                            <div class="ledger-header" style="background-color: var(--color-danger); color: white;">DANGER ZONE</div>
+                            <div class="ledger-body" style="text-align: center; display: flex; flex-direction: column; justify-content: center; height: calc(100% - 30px);">
+                                <h3 style="margin-top:0; font-family: var(--font-mono); color: var(--color-danger);">WIPE DATABASE</h3>
+                                <p style="font-size: 0.85rem; color: var(--color-ink-muted); margin-bottom: 20px;">
+                                    Tindakan ini akan menghapus seluruh rekaman (Truncate) secara permanen dari database aktif saat ini.
+                                </p>
+                                <button id="btn-wipe-db" class="btn btn-danger">HAPUS SELURUH DATA</button>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Bottom Area: Manual Taxonomy Editor -->
+                    <div class="ledger-box">
+                        <div class="ledger-header">MANUAL TAXONOMY EDITOR (LAYER 1 & 2)</div>
+                        <div class="ledger-body" style="display: flex; gap: var(--spacing-lg);">
+                            
+                            <!-- Layer 1 -->
+                            <div style="flex: 1;">
+                                <h3 style="font-family: var(--font-mono); font-size: 1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 5px;">LAYER 1 (DOMAIN)</h3>
+                                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                                    <input type="text" id="input-l1" placeholder="Nama Domain Baru..." class="ledger-input" style="flex: 1;">
+                                    <button class="btn btn-primary" onclick="TaxonomyVM.addLabel('layer_1')">TAMBAH</button>
+                                </div>
+                                <ul id="list-l1" style="list-style-type: none; padding: 0; margin: 0; font-family: var(--font-mono); font-size: 0.85rem; max-height: 200px; overflow-y: auto;">
+                                    <!-- Populated by JS -->
+                                </ul>
+                            </div>
+
+                            <!-- Layer 2 -->
+                            <div style="flex: 1;">
+                                <h3 style="font-family: var(--font-mono); font-size: 1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 5px;">LAYER 2 (DETAIL)</h3>
+                                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                                    <input type="text" id="input-l2" placeholder="Nama Detail Baru..." class="ledger-input" style="flex: 1;">
+                                    <button class="btn btn-primary" onclick="TaxonomyVM.addLabel('layer_2')">TAMBAH</button>
+                                </div>
+                                <ul id="list-l2" style="list-style-type: none; padding: 0; margin: 0; font-family: var(--font-mono); font-size: 0.85rem; max-height: 200px; overflow-y: auto;">
+                                    <!-- Populated by JS -->
+                                </ul>
+                            </div>
+                            
+                        </div>
+                    </div>
+
                 </section>
 
                 <!-- View 3: Looker Embed -->
