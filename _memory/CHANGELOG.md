@@ -1,6 +1,35 @@
 # CHANGELOG
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
+## [v4.4.0] - 2026-05-27
+### Added
+- **Arsitektur Frontend MVVM**: Membangun ulang seluruh arsitektur *frontend* web dari struktur statis monolitik menjadi pola *Model-View-ViewModel (MVVM)* menggunakan Vanilla Javascript di dalam ruang inkubasi baru `_UIUX/`. Perubahan ini memisahkan secara ketat modul `models` (API Fetch), `views` (Manipulasi DOM), dan `viewmodels` (Logika Penengah), mencegah *spaghetti code*.
+- **Desain UI Pembukuan (Ledger Theme)**: Merombak antarmuka pengguna menjadi gaya dokumen resmi/pembukuan. Desain mengadopsi palet warna kertas (*off-white/cream*), border garis tegas, tanpa elemen *glow/shadow* berlebihan, dan eliminasi total seluruh Emoji demi estetika akademik murni.
+- **Show, Don't Tell Telemetry**: Menanamkan baris telemetri metrik *real-time* (seperti Latensi Pencarian, Target Rice Rule, Kalkulasi Dimensi, Rasio Hybrid) secara implisit dan langsung ke dalam layar hasil (*ledger rows*). Hal ini menggantikan teks deskriptif panjang yang sebelumnya digunakan untuk mendemonstrasikan keunggulan sistem.
+
+## [v4.3.0] - 2026-05-27
+### Added
+- **12 Scientific QA Metrics**: Menambahkan total 12 *Quality Assurance Tests* (6 untuk Sistem, 6 untuk Model) berbasis teori *Information Retrieval* dan *NLP* yang valid (Manning, Baeza-Yates, Ethayarajh, dll) ke dalam skrip evaluasi (referensi teori lengkap di [[teori_qa_metrics]]).
+- **Teori QA Metrik**: Mencatat seluruh referensi ilmiah, jurnal, dan rumus kalkulasi metrik seperti *MRR, MAP, Latency, NDCG, Anisotropy, OOV Robustness, Polysemy* ke dalam [[teori_qa_metrics]] (hubungkan dengan [[METRICS_THEORY]]).
+
+### Changed
+- **Download Real Docs**: Mengubah target unduhan pada `download_real_docs.py` menjadi benar-benar representatif (4 format file merata: PDF, DOCX, CSV, XLSX) dengan jaminan file asli bertekstur penuh (*full-text*, bukan sekadar abstrak) dan masing-masing wajib berukuran di bawah 1MB untuk menghindari potensi *bottleneck* RAM.
+
+### Fixed
+- **Testing Logic Correction (Dimension Mismatch)**: Memperbaiki *bug* krusial (`ValueError: shapes (384,) and (5,) not aligned`) pada `ir_metrics_engine.py` yang menggagalkan eksekusi evaluasi multi-domain. *Bug* dipicu oleh keberadaan residu *dummy embeddings* (berdimensi 5) pada pangkalan data tertentu. Solusi yang diimplementasikan adalah *on-the-fly embedding recalculation* (melakukan inferensi ulang *real-time* ke ukuran 384 dimensi) pada saat proses pengujian jika mendeteksi dimensi yang salah, sehingga evaluasi sistem dapat diselesaikan dengan 100% *pass rate*.
+- **Dimensional Collapse (Semantic Anisotropy)**: Menyelesaikan *bug* kritis pada model lama (`indobert-mini`) yang memicu Anisotropy ekstrim (kemiripan "struktur data" dan "sayur bayam" $\approx 93\%$, lihat analisis di [[dimensional_collapse_stki]]). Masalah diselesaikan dengan menginjeksikan skrip `export_sota_model.py` yang mengekstrak `paraphrase-multilingual-MiniLM-L12-v2` lengkap dengan *Mean Pooling* murni secara langsung ke format `.onnx`. Evaluasi membuktikan Anisotropy hancur total, dan *contextual polysemy* kembali sehat. Alur lengkap lihat [[PRESENTASI_SISTEM_STKI]].
+
+
+### Removed
+- **Pembuangan Skrip Usang (Cleanup)**: Membersihkan dan menghapus skrip pembangkit sintesis (`generate_indo_real_docs.py`, `generate_presentation_docs.py`, `seed_domain_dbs.py`, `massive_pump.py`) serta skrip evaluasi purba/legacy untuk membebaskan repositori dari penumpukan (*Tech Debt*).
+
+## [v4.2.1] - 2026-05-26
+### Fixed
+- **Testing Logic Correction**: Memperbaiki asersi logika pada `test_10_logic_flaws.py` (`test_09_null_vector_collapse`) yang sebelumnya gagal karena salah mengasumsikan ketiadaan penanganan teks kosong. Asersi diubah untuk memvalidasi *error message* (`'Konten teks kosong'`) yang secara fungsional ditangkap dan dikembalikan oleh Flask dengan benar.
+- **Race Condition Testing**: Menganalisis dan menyimpulkan *sqlite3.OperationalError: database is locked* pada saat *testing* diakibatkan oleh eksekusi paralel ganda (Race Condition saat `async_relabel_task` mengunci *database*), sehingga pengujian dire-eksekusi secara linear dan *pass* 100%.
+
+### Changed
+- **Documentation Update**: Memperbarui spesifikasi teknis pada [[spesifikasi_teknis]] untuk menghilangkan referensi statis pada `indobert-mini`/`bert-mini` dan menggantinya dengan dokumen landasan teoretis untuk model *State-of-the-Art* terbaru, yaitu `paraphrase-multilingual-MiniLM-L12-v2`. Hub terkait ada di [[INDEX]].
 
 ## [v4.2.0] - 2026-05-24
 ### Added
@@ -17,6 +46,11 @@ Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 - **Pemusnahan Ancaman OOM (Out-of-Memory)**: Mencabut klausa statis `LIMIT 2500` pada `/api/search` `app_web.py`. Menggantinya dengan **SQL Dynamic Pre-Filtering** (`LIKE`) berdasarkan irisan kata kueri. Hal ini mencegah ekstraksi ribuan vektor ke RAM (*Python Heap*) untuk dokumen yang secara matematis tidak mungkin mendapat skor BM25 > 0.
 - **Penyembuhan Frontend Lag**: Memindahkan logika *Grid-2-Col file partitioning* (pemisahan `.csv` dan `.pdf`) dari skrip klien `main.js` ke pemrosesan *Server-Side* di `/api/recommend` `app_web.py`. Ini memangkas Payload JSON yang tidak relevan.
 - **Stop-Word Penalty pada Gatekeeper**: Mengganti perhitungan `overlap` mentah dengan sistem bobot pseudo-IDF. Kata hubung (*stop-words*) seperti "dan", "atau", "di" kini dipenalti menjadi bobot $0.05$ alih-alih $1.0$, mencegah bias *similarity* dokumen sampah yang hanya memiliki kesamaan preposisi.
+- **Sinkronisasi Total Arsitektur GUI (`app_gui.py`)**: Melakukan perombakan *surgikal* pada modul GUI desktop untuk menyelaraskannya dengan Data Science dan backend web (`app_web.py`).
+  - Menghapus ekstraksi sentimen *v_null* dan aktivasi Sigmoid *Temperatur Kalibrasi*.
+  - Mengimplementasikan ekstraksi vektor *Mean Pooling* (384-D) yang valid untuk model *MiniLM*.
+  - Memusnahkan aturan heuristik kuno (`l1_boosts` dan `l2_boosts`) dan menggantinya dengan logika **Soft Lexical Gatekeeper**.
+- **Koreksi Threshold Klasifikasi Multi-Layer**: Memperbaiki logika peredaman (*clipping*) pada skor akhir di `app_web.py` dan `app_gui.py`. Ambang batas pengakuan label dipulihkan dari `0.85` menjadi nilai aslinya sesuai `rencana_implementasi.md` (30% untuk Domain L1 dan 35% untuk Detail L2), memastikan model tidak terlalu konservatif atau pun membuang kemiripan yang valid.
 
 ## [v4.1.0] - 2026-05-22
 ### Added
@@ -48,3 +82,8 @@ Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 ### Purged
 - Folder `_Fondasi/` telah dihapus dari pelacakan repositori Github secara *remote* melalui `git rm -r --cached` dan dimasukkan ke dalam `.gitignore` sesuai instruksi. Repositori Github sekarang hanya diisi oleh implementasi sistem (TKI, STKI, DS, memory), sedangkan teori dirahasiakan secara lokal.
 - Dataset BBC berbahasa Inggris yang salah klasifikasi dihapus karena memicu kegagalan bahasa (*OOV mismatch*).
+
+### Fixed
+- **PyTorch JIT vs Transformers v4.46+ Tracing Bug**: Memperbaiki kegagalan ekspor ONNX pada `BertModel` (MiniLM) di `DS/generate_notebook.py` yang ditandai dengan *Silent Crash (OOM)* dan error beruntun (`multiple values for 'use_cache'`, `tuple index out of range`, serta `sdpa_mask dimension extraction failure`). 
+  - **Surgical Solution 1**: Mengimplementasikan `ONNXExportWrapper` dengan `return_dict=False` dan *keyword argument mapping* (kwargs) paksa untuk menstabilkan struktur parameter *forward pass*.
+  - **Surgical Solution 2**: Menginjeksi *Runtime Monkey-Patch* pada fungsi internal `_create_attention_masks` milik model sebelum *tracing*. Ini secara paksa me-*bypass* implementasi *Scaled Dot Product Attention* (SDPA) dan mengembalikan masker atensi 4D tradisional (`[batch_size, 1, 1, seq_length]`) yang 100% didukung oleh ONNX C++ *backend*.

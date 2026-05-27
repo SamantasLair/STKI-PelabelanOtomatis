@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Temu Kembali Informasi - Arsip</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Georgia&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Styles -->
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>MODUL TEMU KEMBALI HIBRIDA V4.0</h1>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a class="nav-item active" data-target="view-search">I. Pencarian Arsip</a>
+                <a class="nav-item" data-target="view-classifier">II. Klasifikasi Otomatis</a>
+                <a class="nav-item" data-target="view-taxonomy">III. Manajemen Taksonomi</a>
+                <a class="nav-item" data-target="view-recommendation">IV. Rekomendasi Sinkron</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div id="status-engine">ENGINE: OFFLINE</div>
+                <div id="status-model">MODEL: UNKNOWN</div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-telemetry">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">DATABASE:</span>
+                        <select id="select-db" class="telemetry-value" style="width:auto; padding:2px 4px;">
+                            <option value="akademik">AKADEMIK</option>
+                            <option value="politik">POLITIK</option>
+                            <option value="ekonomi">EKONOMI</option>
+                            <option value="bisnis">BISNIS</option>
+                            <option value="etika">ETIKA</option>
+                            <option value="demo_real">DEMO REAL</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="topbar-telemetry">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">ALPHA FUSION:</span>
+                        <input type="number" id="input-alpha" value="0.70" step="0.05" min="0" max="1" style="width: 70px; padding: 2px 4px;">
+                    </div>
+                </div>
+            </header>
+
+            <div class="workspace">
+                
+                <!-- View 1: Search -->
+                <section id="view-search" class="tab-pane active">
+                    <div class="search-controls">
+                        <input type="text" id="input-search-query" placeholder="Masukkan kueri indeks pencarian...">
+                        <button class="btn btn-primary" id="btn-search">EKSEKUSI PENCARIAN</button>
+                    </div>
+
+                    <div class="ledger-box">
+                        <div class="ledger-header">
+                            <span>HASIL PENCARIAN</span>
+                            <span id="search-telemetry" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal; color: var(--color-ink-muted);"></span>
+                        </div>
+                        <div class="ledger-body" id="search-results">
+                            <div class="empty-state">MASUKKAN KUERI UNTUK MEMULAI PENARIKAN DATA</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 2: Classifier -->
+                <section id="view-classifier" class="tab-pane">
+                    <div class="grid-2">
+                        <div class="ledger-box">
+                            <div class="ledger-header">INPUT DOKUMEN</div>
+                            <div class="ledger-body">
+                                <textarea id="input-predict-text" rows="10" placeholder="Salin transkrip dokumen ke sini untuk dianalisis..."></textarea>
+                                <button class="btn btn-primary btn-block" style="margin-top: var(--spacing-sm);" id="btn-predict">ANALISIS DISTRIBUSI SEMANTIK</button>
+                            </div>
+                        </div>
+                        <div class="ledger-box">
+                            <div class="ledger-header">LOG KLASIFIKASI ONNX</div>
+                            <div class="ledger-body" id="predict-results">
+                                <div class="empty-state">MENUNGGU INSTRUKSI...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 3: Taxonomy -->
+                <section id="view-taxonomy" class="tab-pane">
+                    <div class="ledger-box">
+                        <div class="ledger-header">
+                            <span>TEORI RICE RULE (X = ⌈ 2 · N^1/3 ⌉)</span>
+                            <span id="taxonomy-telemetry" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">N: 0 | TARGET: 0 | AKTIF: 0</span>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="ledger-box">
+                            <div class="ledger-header">INDEKS TAKSONOMI</div>
+                            <div class="ledger-body" id="taxonomy-list">
+                                <div class="empty-state">MEMUAT...</div>
+                            </div>
+                        </div>
+                        <div class="ledger-box">
+                            <div class="ledger-header">PANEL KENDALI BATCH</div>
+                            <div class="ledger-body">
+                                <div style="margin-bottom: var(--spacing-md);">
+                                    <label>Aksi Batch Global:</label>
+                                    <button class="btn btn-primary btn-block" id="btn-relabel" style="margin-top: var(--spacing-xs);">RE-LABEL BATCH ONNX</button>
+                                </div>
+                                <div id="relabel-progress-terminal" class="terminal-progress" style="display: none; padding: var(--spacing-sm); background: var(--color-bg); border: 1px solid var(--color-border);">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 4: Recommendation -->
+                <section id="view-recommendation" class="tab-pane">
+                    <div class="search-controls">
+                        <input type="text" id="input-reco-query" placeholder="Ketik topik profil/proyek untuk sinkronisasi rekomendasi...">
+                        <button class="btn btn-primary" id="btn-recommend">TARIK REKOMENDASI</button>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="ledger-box">
+                            <div class="ledger-header">
+                                <span>DATASET (.CSV/.XLSX)</span>
+                                <span id="reco-data-count" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">0 DITEMUKAN</span>
+                            </div>
+                            <div class="ledger-body" id="reco-data-results">
+                                <div class="empty-state">MENUNGGU KUERI...</div>
+                            </div>
+                        </div>
+                        <div class="ledger-box">
+                            <div class="ledger-header">
+                                <span>LITERATUR (.PDF/.DOCX)</span>
+                                <span id="reco-docs-count" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">0 DITEMUKAN</span>
+                            </div>
+                            <div class="ledger-body" id="reco-docs-results">
+                                <div class="empty-state">MENUNGGU KUERI...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts (MVVM Architecture) -->
+    <script src="js/models/apiService.js"></script>
+    <script src="js/views/searchView.js"></script>
+    <script src="js/views/predictView.js"></script>
+    <script src="js/views/taxonomyView.js"></script>
+    <script src="js/views/recommendView.js"></script>
+    <script src="js/viewmodels/searchVM.js"></script>
+    <script src="js/viewmodels/predictVM.js"></script>
+    <script src="js/viewmodels/taxonomyVM.js"></script>
+    <script src="js/viewmodels/recommendVM.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
