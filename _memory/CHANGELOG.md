@@ -1,6 +1,19 @@
 # CHANGELOG
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
+## [v4.5.1] - 2026-05-27
+### Added
+- **Interactive Data Pipeline Graph**: Merombak total laman `_UIUX/ds/index.html` dengan grafik alur kerja interaktif (*nodes & edges*). Grafik berfungsi sebagai alat navigasi dinamis; mengklik node tertentu (seperti *Data Source* atau *K-Means Engine*) akan memunculkan panel fungsionalitas yang sesuai. Efek animasi *marching ants* (`@keyframes flow`) diaktifkan saat proses generasi taksonomi berjalan untuk indikasi *real-time*.
+- **Database Explorer Accordion**: Mengimplementasikan endpoint `GET /api/documents` untuk memuat data dari *database* aktif (dibatasi 500 dokumen untuk performa) pada laman Data Science. Antarmuka menggunakan desain *Accordion* murni via CSS, memungkinkan peninjauan isi dokumen (*full-text*) secara ringkas tanpa merusak tabel.
+- **File-Based Recommendation Engine (STKI)**: Menambah kapabilitas unggah dokumen (`.pdf`, `.docx`, `.csv`, `.xlsx`) menggunakan pola antarmuka *Drag & Drop* ke tab "Rekomendasi Terkait" di sisi pengguna. Sistem otomatis mengekstrak vektor semantik dari file (*file-to-text-to-vector*) lalu mencocokkannya ke database untuk melakukan *Information Retrieval* murni tanpa memerlukan input teks manual.
+
+## [v4.5.0] - 2026-05-27
+### Added
+- **UIUX Bifurcation**: Memecah arsitektur frontend web secara fisik menjadi dua modul terpisah, `/stki` (Ruang Pencarian End-User) dan `/ds` (Ruang Komando Data Science). Mencegah *spaghetti UI* dan menyediakan laman terdedikasi untuk integrasi alat peneliti tingkat lanjut (*Google Looker Studio*).
+- **Unsupervised Dynamic Taxonomy**: Menghapus seluruh sistem label *hardcoded*. Sistem kini menggunakan algoritma **K-Means Clustering** terhadap *dense embeddings* (384D) seluruh dokumen di *database*, dipadukan dengan **TF-IDF** (*Term Frequency-Inverse Document Frequency*) untuk mengekstrak kata kunci dan menciptakan "Nama Label" secara otomatis dan murni *data-driven*.
+- **Otomasi Jumlah Kelompok (Rice Rule)**: Pengelompokan K-Means secara dinamis menentukan jumlah target klaster berdasarkan metrik jumlah dokumen aktual menggunakan rumus $X = \lceil 2 \cdot N^{1/3} \rceil$.
+- **Seamless Document Ingestion**: Membangun modul "Unggah Arsip" (Ingesti) di ruang `/stki` yang langsung membaca file (PDF/Docx/CSV/TXT), mengekstrak teks, menembak model ONNX, memprediksi klasifikasi berdasarkan taksonomi dinamis, lalu langsung melakukan `INSERT` ke SQLite secara *real-time*.
+
 ## [v4.4.0] - 2026-05-27
 ### Added
 - **Arsitektur Frontend MVVM**: Membangun ulang seluruh arsitektur *frontend* web dari struktur statis monolitik menjadi pola *Model-View-ViewModel (MVVM)* menggunakan Vanilla Javascript di dalam ruang inkubasi baru `_UIUX/`. Perubahan ini memisahkan secara ketat modul `models` (API Fetch), `views` (Manipulasi DOM), dan `viewmodels` (Logika Penengah), mencegah *spaghetti code*.

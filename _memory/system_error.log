@@ -1,0 +1,7 @@
+[2026-05-27 18:34:33] [SYSTEM: Recommend API] ERROR: Gagal menarik rekomendasi: Expression tree is too large (maximum depth 1000)
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 551, in recommend
+    cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
+sqlite3.OperationalError: Expression tree is too large (maximum depth 1000)
+
