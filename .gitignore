@@ -18,11 +18,26 @@ _Fondasi/
 .agents/
 testing/
 _debug_read.py
+seed_output.log
+
+# ==========================================
+# FILE BERAT & SEMENTARA
+# ==========================================
+# Abaikan semua pangkalan data SQLite karena terlalu berat (150MB+)
+*.db
+_BackupDemo/
+sample_docs/
+DS/onnx_model/
+DS/results/
+DS/temp_patched_model.onnx
+STKI/onnx_model/*.onnx
+STKI/onnx_model/*.bin
 
 # ==========================================
 # PENGECUALIAN (TIDAK BOLEH DIABAIKAN)
 # ==========================================
-# File Database (.db) dan _memory 
-# harus tetap masuk ke Git sesuai instruksi.
-!*.db
+# _memory harus tetap masuk ke Git sesuai instruksi.
 !_memory/
+
+# Penilaian Kriteria
+penilaian_kriteria.md
