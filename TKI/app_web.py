@@ -1079,6 +1079,58 @@ def reset_database():
         log_error("DB Reset", f"Gagal mereset database: {str(e)}", exc=True)
         return jsonify({"status": "error", "message": f"Gagal mereset database: {e}"})
 
+@app.route("/api/documents/wipe", methods=["POST"])
+def wipe_database():
+    try:
+        conn = sqlite3.connect(active_db_path)
+        c = conn.cursor()
+        c.execute("DELETE FROM documents")
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "success", "message": "Seluruh data berhasil dihapus dari pangkalan data aktif."})
+    except Exception as e:
+        log_error("DB Wipe", f"Gagal wipe data: {str(e)}", exc=True)
+        return jsonify({"status": "error", "message": f"Gagal wipe data: {e}"})
+
+@app.route("/api/documents/batch_upload", methods=["POST"])
+def batch_upload():
+    try:
+        if 'files[]' not in request.files:
+            return jsonify({"status": "error", "message": "Tidak ada file yang diunggah"})
+            
+        files = request.files.getlist('files[]')
+        if not files:
+            return jsonify({"status": "error", "message": "Daftar file kosong"})
+            
+        conn = sqlite3.connect(active_db_path)
+        c = conn.cursor()
+        
+        success_count = 0
+        for file in files:
+            if file.filename == '':
+                continue
+            filename = werkzeug.utils.secure_filename(file.filename)
+            content = extract_text_from_file_object(file, filename)
+            
+            if content:
+                try:
+                    emb = get_onnx_embedding(content)
+                    c.execute("INSERT INTO documents (filename, content, labels, embedding) VALUES (?, ?, ?, ?)", 
+                              (filename, content, json.dumps([]), json.dumps(emb.tolist())))
+                    success_count += 1
+                except sqlite3.IntegrityError:
+                    pass # Abaikan file duplikat
+                except Exception as ex:
+                    log_error("Batch Upload", f"Gagal memproses file {filename}: {str(ex)}")
+                    
+        conn.commit()
+        conn.close()
+        
+        return jsonify({"status": "success", "message": f"{success_count} file berhasil diunggah dan diekstraksi semantiknya!"})
+    except Exception as e:
+        log_error("Batch Upload", f"Kesalahan internal: {str(e)}", exc=True)
+        return jsonify({"status": "error", "message": str(e)})
+
 if __name__ == "__main__":
     print("[INFO] Memulai server Flask pada http://127.0.0.1:5000")
     app.run(host="127.0.0.1", port=5000, debug=False)
