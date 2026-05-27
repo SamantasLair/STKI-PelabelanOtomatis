@@ -1,6 +1,6 @@
 @echo off
 echo ===================================================
-echo [RESTARTING FLASK SERVER]
+echo [RESTARTING FLASK SERVER - UIUX LEDGER THEME]
 echo ===================================================
 
 echo [1/3] Menutup server lama yang berjalan pada port 5000...

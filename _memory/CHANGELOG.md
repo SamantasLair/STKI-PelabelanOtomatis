@@ -6,6 +6,7 @@ Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 - **Arsitektur Frontend MVVM**: Membangun ulang seluruh arsitektur *frontend* web dari struktur statis monolitik menjadi pola *Model-View-ViewModel (MVVM)* menggunakan Vanilla Javascript di dalam ruang inkubasi baru `_UIUX/`. Perubahan ini memisahkan secara ketat modul `models` (API Fetch), `views` (Manipulasi DOM), dan `viewmodels` (Logika Penengah), mencegah *spaghetti code*.
 - **Desain UI Pembukuan (Ledger Theme)**: Merombak antarmuka pengguna menjadi gaya dokumen resmi/pembukuan. Desain mengadopsi palet warna kertas (*off-white/cream*), border garis tegas, tanpa elemen *glow/shadow* berlebihan, dan eliminasi total seluruh Emoji demi estetika akademik murni.
 - **Show, Don't Tell Telemetry**: Menanamkan baris telemetri metrik *real-time* (seperti Latensi Pencarian, Target Rice Rule, Kalkulasi Dimensi, Rasio Hybrid) secara implisit dan langsung ke dalam layar hasil (*ledger rows*). Hal ini menggantikan teks deskriptif panjang yang sebelumnya digunakan untuk mendemonstrasikan keunggulan sistem.
+- **Flask Routing Integration**: Mengarahkan modul *backend* `app_web.py` dan skrip `restart_server.bat` untuk secara langsung menyajikan `_UIUX/` sebagai folder templat dan aset statis utamanya, meresmikan transisi dari UI lama ke desain Pembukuan (*Ledger Theme*).
 
 ## [v4.3.0] - 2026-05-27
 ### Added

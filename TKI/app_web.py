@@ -17,7 +17,10 @@ ONNX_FILE = os.path.join(ONNX_DIR, "multi_label_model.onnx")
 DB_PATH = os.path.join(ROOT_DIR, "academic_metadata.db")
 DB_REAL_PATH = os.path.join(ROOT_DIR, "academic_demo_real.db")
 
-app = Flask(__name__, template_folder=os.path.join(CURRENT_DIR, "templates"), static_folder=os.path.join(CURRENT_DIR, "static"))
+app = Flask(__name__, 
+            template_folder=os.path.join(ROOT_DIR, "_UIUX"), 
+            static_folder=os.path.join(ROOT_DIR, "_UIUX"),
+            static_url_path="/")
 
 # State Sistem Aktif (Default)
 active_db_type = "akademik"
@@ -307,7 +310,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
             # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
             stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
             for i, label in enumerate(tax_layer2):
-                text_words = set(text.lower().split())
+                text_words = set(text_lower.split())
                 label_words = set(label.lower().split())
                 
                 # Hitung bobot irisan, abaikan stop words
@@ -327,7 +330,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                     l2_raw_sims[i] = l2_raw_sims[i] * 0.80
             
             for i in range(len(l2_raw_sims)):
-                if l2_raw_sims[i] < 0.85: # Threshold disesuaikan menjadi 0.85
+                if l2_raw_sims[i] < 0.35: # Threshold disesuaikan menjadi 35%
                     l2_raw_sims[i] = 0.0
             
             best_l2_label = "Tidak Terklasifikasi"
@@ -348,7 +351,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
             # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
             stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
             for i, label in enumerate(tax_layer1):
-                text_words = set(text.lower().split())
+                text_words = set(text_lower.split())
                 label_words = set(label.lower().split())
                 
                 overlap_weight = 0.0
@@ -364,7 +367,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                     l1_raw_sims[i] = l1_raw_sims[i] * 0.80
             
             for i in range(len(l1_raw_sims)):
-                if l1_raw_sims[i] < 0.85:
+                if l1_raw_sims[i] < 0.30: # Threshold disesuaikan menjadi 30%
                     l1_raw_sims[i] = 0.0
                 
             best_l1_label = "Tidak Terklasifikasi"
@@ -640,7 +643,7 @@ def predict():
             l2_raw_sims[i] = l2_raw_sims[i] * 0.80
 
     for i in range(len(l2_raw_sims)):
-        if l2_raw_sims[i] < 0.85:
+        if l2_raw_sims[i] < 0.35: # Threshold Layer 2: 35%
             l2_raw_sims[i] = 0.0
         
     l2_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l2_raw_sims]
@@ -680,7 +683,7 @@ def predict():
             l1_raw_sims[i] = l1_raw_sims[i] * 0.80
 
     for i in range(len(l1_raw_sims)):
-        if l1_raw_sims[i] < 0.85:
+        if l1_raw_sims[i] < 0.30: # Threshold Layer 1: 30%
             l1_raw_sims[i] = 0.0
         
     l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
