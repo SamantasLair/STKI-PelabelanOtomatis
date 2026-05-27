@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import math
 import threading
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect
 
 # Konfigurasi Path
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,102 +34,50 @@ DB_PATHS = {
 }
 active_db_path = DB_PATHS[active_db_type]
 
-# Taksonomi Dinamis untuk 6 Database
-TAXONOMIES = {
-    "akademik": {
-        "Layer_1_Domain": ["Akademik Mahasiswa", "Administrasi Dosen", "Jadwal dan SKS Perkuliahan"],
-        "Layer_2_Detail": ["Transkrip Nilai Lengkap", "KRS SKS Kelas", "Daftar Dosen Pengajar", "Laporan Keuangan", "Kurikulum Jurusan"]
-    },
-    "politik": {
-        "Layer_1_Domain": ["Kebijakan Publik", "Pemilihan Umum", "Partai Politik"],
-        "Layer_2_Detail": ["RUU Pemilu", "Laporan Kampanye", "Debat Kandidat", "Regulasi Daerah", "Survei Elektabilitas"]
-    },
-    "ekonomi": {
-        "Layer_1_Domain": ["Makroekonomi", "Mikroekonomi", "Keuangan Internasional"],
-        "Layer_2_Detail": ["Laporan Inflasi", "Kebijakan Moneter", "Pasar Saham", "Analisis UMKM", "Nilai Tukar Mata Uang"]
-    },
-    "bisnis": {
-        "Layer_1_Domain": ["Hukum Perusahaan", "Pajak & Cukai", "Ketenagakerjaan"],
-        "Layer_2_Detail": ["Pendirian PT", "Pajak Pertambahan Nilai", "Kontrak Karyawan", "Izin Usaha", "Audit Keuangan"]
-    },
-    "etika": {
-        "Layer_1_Domain": ["Etika Profesi", "Integritas Korporat", "Hak Asasi Manusia"],
-        "Layer_2_Detail": ["Kode Etik Kedokteran", "Anti Korupsi", "Whistleblower", "Diskriminasi Tempat Kerja", "Perlindungan Data Pribadi"]
-    },
-    "demo_real": {
-        "Layer_1_Domain": ["Skripsi & Tugas Akhir", "Dataset & Publikasi Riset", "Jurnal & Artikel Ilmiah"],
-        "Layer_2_Detail": [
-            "Skripsi Informatika", "Skripsi Sistem Informasi", "Skripsi Teknik Komputer",
-            "Dataset Citra Medis", "Dataset Teks Indonesia", "Dataset Sensor IoT",
-            "Jurnal Sinta 1 Gold", "Jurnal Sinta 2 Silver", "Jurnal Sinta 3 Bronze",
-            "Artikel Konferensi IEEE", "Artikel Prosiding Nasional", "Laporan Pengabdian",
-            "Proposal Hibah Riset", "Monograf Buku Ajar", "Paten HAKI Terdaftar",
-            "Hak Cipta Software", "Desain Industri"
-        ]
-    }
-}
+# Taksonomi Dinamis (Diload dari file JSON)
+TAXONOMY_FILE = os.path.join(ROOT_DIR, "taxonomy_dynamic.json")
 
-TAXONOMY = {
-    "Layer_1_Domain": list(TAXONOMIES[active_db_type]["Layer_1_Domain"]),
-    "Layer_2_Detail": list(TAXONOMIES[active_db_type]["Layer_2_Detail"])
-}
+def load_taxonomy(db_type):
+    if not os.path.exists(TAXONOMY_FILE):
+        return {"Layer_1_Domain": ["Umum"], "Layer_2_Detail": ["Tidak Terklasifikasi"]}
+    try:
+        with open(TAXONOMY_FILE, 'r') as f:
+            data = json.load(f)
+            return data.get(db_type, {"Layer_1_Domain": ["Umum"], "Layer_2_Detail": ["Tidak Terklasifikasi"]})
+    except:
+        return {"Layer_1_Domain": ["Umum"], "Layer_2_Detail": ["Tidak Terklasifikasi"]}
 
-# Peta turunan ke induk secara statik untuk UI dan Helper fallback
-CHILD_TO_PARENT_MAP = {
-    # Akademik
-    "Transkrip Nilai Lengkap": "Akademik Mahasiswa",
-    "KRS SKS Kelas": "Akademik Mahasiswa",
-    "Laporan Keuangan": "Akademik Mahasiswa",
-    "Daftar Dosen Pengajar": "Administrasi Dosen",
-    "Kurikulum Jurusan": "Jadwal dan SKS Perkuliahan",
-    
-    # Politik
-    "RUU Pemilu": "Pemilihan Umum",
-    "Laporan Kampanye": "Pemilihan Umum",
-    "Debat Kandidat": "Pemilihan Umum",
-    "Regulasi Daerah": "Kebijakan Publik",
-    "Survei Elektabilitas": "Partai Politik",
-    
-    # Ekonomi
-    "Laporan Inflasi": "Makroekonomi",
-    "Kebijakan Moneter": "Makroekonomi",
-    "Pasar Saham": "Keuangan Internasional",
-    "Nilai Tukar Mata Uang": "Keuangan Internasional",
-    "Analisis UMKM": "Mikroekonomi",
-    
-    # Bisnis
-    "Pendirian PT": "Hukum Perusahaan",
-    "Izin Usaha": "Hukum Perusahaan",
-    "Pajak Pertambahan Nilai": "Pajak & Cukai",
-    "Kontrak Karyawan": "Ketenagakerjaan",
-    "Audit Keuangan": "Pajak & Cukai",
-    
-    # Etika
-    "Kode Etik Kedokteran": "Etika Profesi",
-    "Anti Korupsi": "Integritas Korporat",
-    "Whistleblower": "Integritas Korporat",
-    "Diskriminasi Tempat Kerja": "Hak Asasi Manusia",
-    "Perlindungan Data Pribadi": "Hak Asasi Manusia",
-    
-    # Demo Real
-    "Skripsi Informatika": "Skripsi & Tugas Akhir",
-    "Skripsi Sistem Informasi": "Skripsi & Tugas Akhir",
-    "Skripsi Teknik Komputer": "Skripsi & Tugas Akhir",
-    "Dataset Citra Medis": "Dataset & Publikasi Riset",
-    "Dataset Teks Indonesia": "Dataset & Publikasi Riset",
-    "Dataset Sensor IoT": "Dataset & Publikasi Riset",
-    "Paten HAKI Terdaftar": "Dataset & Publikasi Riset",
-    "Hak Cipta Software": "Dataset & Publikasi Riset",
-    "Desain Industri": "Dataset & Publikasi Riset",
-    "Proposal Hibah Riset": "Dataset & Publikasi Riset",
-    "Jurnal Sinta 1 Gold": "Jurnal & Artikel Ilmiah",
-    "Jurnal Sinta 2 Silver": "Jurnal & Artikel Ilmiah",
-    "Jurnal Sinta 3 Bronze": "Jurnal & Artikel Ilmiah",
-    "Artikel Konferensi IEEE": "Jurnal & Artikel Ilmiah",
-    "Artikel Prosiding Nasional": "Jurnal & Artikel Ilmiah",
-    "Laporan Pengabdian": "Jurnal & Artikel Ilmiah",
-    "Monograf Buku Ajar": "Jurnal & Artikel Ilmiah",
-}
+def save_taxonomy(db_type, tax_data):
+    data = {}
+    if os.path.exists(TAXONOMY_FILE):
+        try:
+            with open(TAXONOMY_FILE, 'r') as f:
+                data = json.load(f)
+        except:
+            pass
+    data[db_type] = tax_data
+    with open(TAXONOMY_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
+
+TAXONOMY = load_taxonomy(active_db_type)
+
+import datetime
+import traceback
+
+ERROR_LOG_FILE = os.path.join(ROOT_DIR, "_memory", "system_error.log")
+
+def log_error(system_name, error_msg, exc=None):
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] [SYSTEM: {system_name}] ERROR: {error_msg}\n"
+    if exc:
+        log_entry += f"TRACE:\n{traceback.format_exc()}\n"
+    try:
+        # Buat folder _memory jika belum ada
+        os.makedirs(os.path.dirname(ERROR_LOG_FILE), exist_ok=True)
+        with open(ERROR_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+    except:
+        pass
 
 # Inisialisasi ONNX Engine
 import onnxruntime as ort
@@ -391,7 +339,37 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return redirect("/stki")
+
+@app.route("/stki")
+def stki_view():
+    return render_template("stki/index.html")
+
+@app.route("/ds")
+def ds_view():
+    return render_template("ds/index.html")
+
+@app.route("/api/documents", methods=["GET"])
+def get_documents():
+    try:
+        conn = sqlite3.connect(active_db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT 500")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        docs = []
+        for r in rows:
+            docs.append({
+                "id": r[0],
+                "filename": r[1],
+                "labels": json.loads(r[2]) if r[2] else [],
+                "content": r[3]
+            })
+        return jsonify({"status": "success", "documents": docs})
+    except Exception as e:
+        log_error("DB Explorer", f"Gagal memuat dokumen: {str(e)}", exc=True)
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/api/status", methods=["GET"])
 def get_status():
@@ -460,11 +438,10 @@ def switch_db():
     data = request.get_json()
     target = data.get("db_type", "akademik")
     
-    if target in TAXONOMIES:
+    if target in DB_PATHS:
         active_db_type = target
         active_db_path = DB_PATHS[target]
-        TAXONOMY["Layer_1_Domain"] = list(TAXONOMIES[target]["Layer_1_Domain"])
-        TAXONOMY["Layer_2_Detail"] = list(TAXONOMIES[target]["Layer_2_Detail"])
+        TAXONOMY = load_taxonomy(target)
         
         # Trigger real demo generation if it's demo_real and doesn't exist
         if target == "demo_real" and not os.path.exists(active_db_path):
@@ -474,232 +451,282 @@ def switch_db():
 
 @app.route("/api/search", methods=["POST"])
 def search():
-    data = request.get_json()
-    query = data.get("query", "").strip()
-    alpha = float(data.get("alpha", 0.70))
-    
-    if not query:
-        return jsonify([])
+    try:
+        data = request.get_json()
+        query = data.get("query", "").strip()
+        alpha = float(data.get("alpha", 0.70))
         
-    doc_vector = get_onnx_embedding(query)
-    
-    conn = sqlite3.connect(active_db_path)
-    cursor = conn.cursor()
-    
-    # [FIXED] Menghapus LIMIT 2500. Menggunakan SQL LIKE dinamis sebagai pre-filter
-    # Ini memastikan hanya dokumen yang berpotensi memiliki BM25 > 0 yang ditarik ke Memory,
-    # menyelamatkan OOM tanpa merusak akurasi global corpus.
-    query_words = query.lower().split()
-    if not query_words:
-        return jsonify([])
+        if not query:
+            return jsonify([])
+            
+        doc_vector = get_onnx_embedding(query)
         
-    conditions = " OR ".join(["content LIKE ?" for _ in query_words])
-    params = [f"%{w}%" for w in query_words]
-    
-    cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions}", params)
-    rows_db = cursor.fetchall()
-    conn.close()
-    
-    if not rows_db:
-        return jsonify([])
+        conn = sqlite3.connect(active_db_path)
+        cursor = conn.cursor()
         
-    corpus = [row[2] for row in rows_db]
-    filenames = [row[0] for row in rows_db]
-    labels_list = [json.loads(row[1]) for row in rows_db]
-    embeddings = [np.array(json.loads(row[3])) for row in rows_db]
-    
-    # BM25 Sparse Retrieval dengan Normalisasi Probabilistik (Asimtotik)
-    bm25 = BM25(corpus)
-    query_words = query.lower().split()
-    bm25_scores = [bm25.get_score(query_words, i) for i in range(len(corpus))]
-    # Menggunakan fungsi 1 - exp(-0.2 * score) untuk normalisasi asimtotik (rentang 0-1)
-    # Alih-alih max() yang merusak relativitas skor.
-    norm_bm25_scores = [1.0 - np.exp(-0.2 * score) for score in bm25_scores]
-    
-    results = []
-    for i in range(len(rows_db)):
-        dense_sim = get_cosine_similarity(doc_vector, embeddings[i])
-        sparse_score = norm_bm25_scores[i]
+        query_words = query.lower().split()
+        if not query_words:
+            return jsonify([])
+            
+        conditions = " OR ".join(["content LIKE ?" for _ in query_words])
+        params = [f"%{w}%" for w in query_words]
         
-        # Hybrid Fusion (Linear Combination) dengan Penalty Absolut untuk OOD
-        if sparse_score <= 0.05:
-            hybrid_score = 0.0
-        else:
-            hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
-        final_sim = max(0.0, min(1.0, hybrid_score)) * 100.0
+        cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions}", params)
+        rows_db = cursor.fetchall()
+        conn.close()
         
-        results.append({
-            "filename": filenames[i],
-            "labels": labels_list[i],
-            "content": corpus[i],
-            "dense_score": float(dense_sim * 100.0),
-            "sparse_score": float(sparse_score * 100.0),
-            "similarity": float(final_sim)
-        })
+        if not rows_db:
+            return jsonify([])
+            
+        corpus = [row[2] for row in rows_db]
+        filenames = [row[0] for row in rows_db]
+        labels_list = [json.loads(row[1]) for row in rows_db]
+        embeddings = [np.array(json.loads(row[3])) for row in rows_db]
         
-    # Sort Descending
-    results = sorted(results, key=lambda x: x["similarity"], reverse=True)
-    return jsonify(results[:15])  # Kembalikan top 15 dokumen terbaik
+        bm25 = BM25(corpus)
+        query_words = query.lower().split()
+        bm25_scores = [bm25.get_score(query_words, i) for i in range(len(corpus))]
+        norm_bm25_scores = [1.0 - np.exp(-0.2 * score) for score in bm25_scores]
+        
+        results = []
+        for i in range(len(rows_db)):
+            dense_sim = get_cosine_similarity(doc_vector, embeddings[i])
+            sparse_score = norm_bm25_scores[i]
+            
+            if sparse_score <= 0.05:
+                hybrid_score = 0.0
+            else:
+                hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
+            final_sim = max(0.0, min(1.0, hybrid_score)) * 100.0
+            
+            results.append({
+                "filename": filenames[i],
+                "labels": labels_list[i],
+                "content": corpus[i],
+                "dense_score": float(dense_sim * 100.0),
+                "sparse_score": float(sparse_score * 100.0),
+                "similarity": float(final_sim)
+            })
+            
+        results = sorted(results, key=lambda x: x["similarity"], reverse=True)
+        return jsonify(results[:15])
+    except Exception as e:
+        log_error("Search API", f"Gagal mengeksekusi pencarian: {str(e)}", exc=True)
+        return jsonify({"error": str(e)})
 
 @app.route("/api/recommend", methods=["POST"])
 def recommend():
-    # Endpoint khusus untuk Recommendation Engine dengan Server-Side Pagination
-    data = request.get_json()
-    query = data.get("query", "").strip()
-    alpha = float(data.get("alpha", 0.70))
-    limit = int(data.get("limit", 20))
-    offset = int(data.get("offset", 0))
-    
-    if not query:
-        return jsonify({"data_files": [], "doc_files": []})
+    try:
+        query = ""
+        alpha = 0.70
+        limit = 20
+        offset = 0
         
-    doc_vector = get_onnx_embedding(query)
-    query_words = query.lower().split()
-    conditions = " OR ".join(["content LIKE ?" for _ in query_words])
-    params = [f"%{w}%" for w in query_words]
-    
-    conn = sqlite3.connect(active_db_path)
-    cursor = conn.cursor()
-    # Pagination diterapkan langsung pada SQL DB
-    cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
-    rows_db = cursor.fetchall()
-    conn.close()
-    
-    if not rows_db:
-        return jsonify({"data_files": [], "doc_files": []})
+        if request.content_type and "multipart/form-data" in request.content_type:
+            alpha = float(request.form.get("alpha", 0.70))
+            limit = int(request.form.get("limit", 20))
+            offset = int(request.form.get("offset", 0))
+            if 'file' in request.files:
+                file = request.files['file']
+                if file.filename != '':
+                    filename = werkzeug.utils.secure_filename(file.filename)
+                    query = extract_text_from_file_object(file, filename)
+        else:
+            data = request.get_json() or {}
+            query = data.get("query", "").strip()
+            alpha = float(data.get("alpha", 0.70))
+            limit = int(data.get("limit", 20))
+            offset = int(data.get("offset", 0))
         
-    corpus = [row[2] for row in rows_db]
-    filenames = [row[0] for row in rows_db]
-    embeddings = [np.array(json.loads(row[3])) for row in rows_db]
-    
-    bm25 = BM25(corpus)
-    norm_bm25_scores = [1.0 - np.exp(-0.2 * bm25.get_score(query_words, i)) for i in range(len(corpus))]
-    
-    data_files = []
-    doc_files = []
-    
-    for i in range(len(rows_db)):
-        sparse_score = norm_bm25_scores[i]
-        if sparse_score <= 0.05:
-            continue
+        if not query:
+            return jsonify({"data_files": [], "doc_files": []})
             
-        dense_sim = get_cosine_similarity(doc_vector, embeddings[i])
-        hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
-        final_sim = max(0.0, min(1.0, hybrid_score)) * 100.0
+        doc_vector = get_onnx_embedding(query)
+        query_words = query.lower().split()
+        conditions = " OR ".join(["content LIKE ?" for _ in query_words])
+        params = [f"%{w}%" for w in query_words]
         
-        lower_name = filenames[i].lower()
-        doc_obj = {
-            "filename": filenames[i],
-            "similarity": float(final_sim)
-        }
+        conn = sqlite3.connect(active_db_path)
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
+        rows_db = cursor.fetchall()
+        conn.close()
         
-        # Server-Side File Partitioning
-        if lower_name.endswith('.csv') or lower_name.endswith('.xlsx'):
-            data_files.append(doc_obj)
-        elif lower_name.endswith('.pdf') or lower_name.endswith('.docx') or lower_name.endswith('.txt'):
-            doc_files.append(doc_obj)
+        if not rows_db:
+            return jsonify({"data_files": [], "doc_files": []})
             
-    data_files = sorted(data_files, key=lambda x: x["similarity"], reverse=True)
-    doc_files = sorted(doc_files, key=lambda x: x["similarity"], reverse=True)
-    
-    return jsonify({
-        "data_files": data_files,
-        "doc_files": doc_files
-    })
+        corpus = [row[2] for row in rows_db]
+        filenames = [row[0] for row in rows_db]
+        embeddings = [np.array(json.loads(row[3])) for row in rows_db]
+        
+        bm25 = BM25(corpus)
+        norm_bm25_scores = [1.0 - np.exp(-0.2 * bm25.get_score(query_words, i)) for i in range(len(corpus))]
+        
+        data_files = []
+        doc_files = []
+        
+        for i in range(len(rows_db)):
+            sparse_score = norm_bm25_scores[i]
+            if sparse_score <= 0.05:
+                continue
+                
+            dense_sim = get_cosine_similarity(doc_vector, embeddings[i])
+            hybrid_score = alpha * dense_sim + (1.0 - alpha) * sparse_score
+            final_sim = max(0.0, min(1.0, hybrid_score)) * 100.0
+            
+            lower_name = filenames[i].lower()
+            doc_obj = {
+                "filename": filenames[i],
+                "similarity": float(final_sim)
+            }
+            
+            if lower_name.endswith('.csv') or lower_name.endswith('.xlsx'):
+                data_files.append(doc_obj)
+            elif lower_name.endswith('.pdf') or lower_name.endswith('.docx') or lower_name.endswith('.txt'):
+                doc_files.append(doc_obj)
+                
+        data_files = sorted(data_files, key=lambda x: x["similarity"], reverse=True)
+        doc_files = sorted(doc_files, key=lambda x: x["similarity"], reverse=True)
+        
+        return jsonify({
+            "data_files": data_files,
+            "doc_files": doc_files
+        })
+    except Exception as e:
+        log_error("Recommend API", f"Gagal menarik rekomendasi: {str(e)}", exc=True)
+        return jsonify({"error": str(e)})
 
 @app.route("/api/predict", methods=["POST"])
 def predict():
-    data = request.get_json()
-    text = data.get("text", "").strip()
-    if not text:
-        return jsonify({"error": "Konten teks kosong"})
+    try:
+        data = request.get_json()
+        text = data.get("text", "").strip()
+        if not text:
+            return jsonify({"error": "Konten teks kosong"})
+            
+        doc_vector = get_onnx_embedding(text)
+        text_lower = text.lower()
         
-    doc_vector = get_onnx_embedding(text)
-    text_lower = text.lower()
-    
-    # 1. Layer 2 Detail prediction
-    l2_raw_sims = []
-    for label in TAXONOMY["Layer_2_Detail"]:
-        lbl_vector = get_onnx_embedding(label)
-        sim = get_cosine_similarity(doc_vector, lbl_vector)
-        l2_raw_sims.append(sim)
-        
-    # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
-    stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
-    for i, label in enumerate(TAXONOMY["Layer_2_Detail"]):
-        text_words = set(text.lower().split())
-        label_words = set(label.lower().split())
-        
-        overlap_weight = 0.0
-        for w in text_words.intersection(label_words):
-            if w not in stop_words:
-                overlap_weight += 1.0
+        # 1. Layer 2 Detail prediction
+        l2_raw_sims = []
+        for label in TAXONOMY.get("Layer_2_Detail", []):
+            lbl_vector = get_onnx_embedding(label)
+            sim = get_cosine_similarity(doc_vector, lbl_vector)
+            l2_raw_sims.append(sim)
+            
+        # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
+        stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
+        for i, label in enumerate(TAXONOMY.get("Layer_2_Detail", [])):
+            text_words = set(text_lower.split())
+            label_words = set(label.lower().split())
+            
+            overlap_weight = 0.0
+            for w in text_words.intersection(label_words):
+                if w not in stop_words:
+                    overlap_weight += 1.0
+                else:
+                    overlap_weight += 0.05
+                    
+            if overlap_weight > 0.5:
+                l2_raw_sims[i] = l2_raw_sims[i] * 1.0
             else:
-                overlap_weight += 0.05
-                
-        if overlap_weight > 0.5:
-            l2_raw_sims[i] = l2_raw_sims[i] * 1.0
-        else:
-            l2_raw_sims[i] = l2_raw_sims[i] * 0.80
+                l2_raw_sims[i] = l2_raw_sims[i] * 0.80
 
-    for i in range(len(l2_raw_sims)):
-        if l2_raw_sims[i] < 0.35: # Threshold Layer 2: 35%
-            l2_raw_sims[i] = 0.0
-        
-    l2_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l2_raw_sims]
-    l2_sorted = sorted(zip(TAXONOMY["Layer_2_Detail"], l2_scores), key=lambda x: x[1], reverse=True)
-    
-    best_l2_label = "Tidak Terklasifikasi"
-    if l2_sorted[0][1] > 0.0:
-        best_l2_label = l2_sorted[0][0]
-    else:
-        l2_sorted = [("Tidak Terklasifikasi", 0.0)] + l2_sorted
+        for i in range(len(l2_raw_sims)):
+            if l2_raw_sims[i] < 0.35: 
+                l2_raw_sims[i] = 0.0
+            
+        l2_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l2_raw_sims]
+        l2_sorted = sorted(zip(TAXONOMY.get("Layer_2_Detail", []), l2_scores), key=lambda x: x[1], reverse=True)
+        if not l2_sorted or l2_sorted[0][1] == 0.0:
+            l2_sorted = [("Tidak Terklasifikasi", 0.0)] + l2_sorted
 
-    # 2. Layer 1 Domain prediction
-    l1_raw_sims = []
-    for label in TAXONOMY["Layer_1_Domain"]:
-        lbl_vector = get_onnx_embedding(label)
-        sim = get_cosine_similarity(doc_vector, lbl_vector)
-        l1_raw_sims.append(sim)
-        
-    # [FIXED] Menghapus propagasi hierarki di Layer 1.
-    
-    # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
-    stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
-    for i, label in enumerate(TAXONOMY["Layer_1_Domain"]):
-        text_words = set(text.lower().split())
-        label_words = set(label.lower().split())
-        
-        overlap_weight = 0.0
-        for w in text_words.intersection(label_words):
-            if w not in stop_words:
-                overlap_weight += 1.0
+        # 2. Layer 1 Domain prediction
+        l1_raw_sims = []
+        for label in TAXONOMY.get("Layer_1_Domain", []):
+            lbl_vector = get_onnx_embedding(label)
+            sim = get_cosine_similarity(doc_vector, lbl_vector)
+            l1_raw_sims.append(sim)
+            
+        for i, label in enumerate(TAXONOMY.get("Layer_1_Domain", [])):
+            text_words = set(text_lower.split())
+            label_words = set(label.lower().split())
+            
+            overlap_weight = 0.0
+            for w in text_words.intersection(label_words):
+                if w not in stop_words:
+                    overlap_weight += 1.0
+                else:
+                    overlap_weight += 0.05
+                    
+            if overlap_weight > 0.5:
+                l1_raw_sims[i] = l1_raw_sims[i] * 1.0
             else:
-                overlap_weight += 0.05
-                
-        if overlap_weight > 0.5:
-            l1_raw_sims[i] = l1_raw_sims[i] * 1.0
-        else:
-            l1_raw_sims[i] = l1_raw_sims[i] * 0.80
+                l1_raw_sims[i] = l1_raw_sims[i] * 0.80
 
-    for i in range(len(l1_raw_sims)):
-        if l1_raw_sims[i] < 0.30: # Threshold Layer 1: 30%
-            l1_raw_sims[i] = 0.0
+        for i in range(len(l1_raw_sims)):
+            if l1_raw_sims[i] < 0.30: 
+                l1_raw_sims[i] = 0.0
+            
+        l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
+        l1_sorted = sorted(zip(TAXONOMY.get("Layer_1_Domain", []), l1_scores), key=lambda x: x[1], reverse=True)
+        if not l1_sorted or l1_sorted[0][1] == 0.0:
+            l1_sorted = [("Tidak Terklasifikasi", 0.0)] + l1_sorted
         
-    l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
-    l1_sorted = sorted(zip(TAXONOMY["Layer_1_Domain"], l1_scores), key=lambda x: x[1], reverse=True)
-    if l1_sorted[0][1] == 0.0:
-        l1_sorted = [("Tidak Terklasifikasi", 0.0)] + l1_sorted
-    
-    return jsonify({
-        "layer_1": [{"label": x[0], "score": float(x[1])} for x in l1_sorted],
-        "layer_2": [{"label": x[0], "score": float(x[1])} for x in l2_sorted]
-    })
+        return jsonify({
+            "layer_1": [{"label": x[0], "score": float(x[1])} for x in l1_sorted],
+            "layer_2": [{"label": x[0], "score": float(x[1])} for x in l2_sorted]
+        })
+    except Exception as e:
+        log_error("Predict API", f"Gagal memprediksi teks: {str(e)}", exc=True)
+        return jsonify({"error": str(e)})
 
 import werkzeug.utils
 
-@app.route("/api/upload", methods=["POST"])
-def upload_file():
+def extract_text_from_file_object(file, filename):
+    ext = os.path.splitext(filename)[1].lower()
+    content = ""
+    
+    if ext in ['.xlsx', '.csv']:
+        df = pd.read_excel(file) if ext == '.xlsx' else pd.read_csv(file)
+        cols = ", ".join(df.columns.astype(str).tolist())
+        row_samples = []
+        if not df.empty:
+            for idx, row in df.head(3).iterrows():
+                row_str = " | ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
+                row_samples.append(f"Baris {idx+1}: {row_str}")
+        sample_text = " // ".join(row_samples)
+        content = f"Dokumen spreadsheet tabel. Kolom: {cols}. Data: {sample_text}"
+    elif ext == '.pdf':
+        import pypdf
+        import io
+        pdf_file = io.BytesIO(file.read())
+        reader = pypdf.PdfReader(pdf_file)
+        text_pages = []
+        for page in reader.pages:
+            t = page.extract_text()
+            if t:
+                text_pages.append(t)
+        content = "\n".join(text_pages)
+        if not content.strip():
+            content = f"Dokumen PDF {filename} (tidak dapat mengekstrak teks)."
+    elif ext == '.docx':
+        import docx
+        import io
+        docx_file = io.BytesIO(file.read())
+        doc = docx.Document(docx_file)
+        content = "\n".join([para.text for para in doc.paragraphs])
+        if not content.strip():
+            content = f"Dokumen Word {filename} (tidak dapat mengekstrak teks)."
+    elif ext == '.txt':
+        content = file.read().decode('utf-8', errors='ignore')
+    else:
+        content = f"Dokumen {ext.upper()} dengan nama berkas {filename}. Berisi informasi terstruktur yang diunggah oleh pengguna."
+        
+    return content
+
+@app.route("/api/ingest", methods=["POST"])
+def ingest_file():
     if 'file' not in request.files:
         return jsonify({"error": "Tidak ada file yang diunggah"})
     
@@ -709,46 +736,76 @@ def upload_file():
         
     try:
         filename = werkzeug.utils.secure_filename(file.filename)
-        ext = os.path.splitext(filename)[1].lower()
-        
-        if ext in ['.xlsx', '.csv']:
-            df = pd.read_excel(file) if ext == '.xlsx' else pd.read_csv(file)
-            cols = ", ".join(df.columns.astype(str).tolist())
-            row_samples = []
-            if not df.empty:
-                for idx, row in df.head(3).iterrows():
-                    row_str = " | ".join([f"{col}: {val}" for col, val in row.items() if pd.notna(val)])
-                    row_samples.append(f"Baris {idx+1}: {row_str}")
-            sample_text = " // ".join(row_samples)
-            content = f"Dokumen spreadsheet tabel. Kolom: {cols}. Data: {sample_text}"
-        elif ext == '.pdf':
-            import pypdf
-            import io
-            pdf_file = io.BytesIO(file.read())
-            reader = pypdf.PdfReader(pdf_file)
-            text_pages = []
-            for page in reader.pages:
-                t = page.extract_text()
-                if t:
-                    text_pages.append(t)
-            content = "\n".join(text_pages)
-            if not content.strip():
-                content = f"Dokumen PDF {filename} (tidak dapat mengekstrak teks)."
-        elif ext == '.docx':
-            import docx
-            import io
-            docx_file = io.BytesIO(file.read())
-            doc = docx.Document(docx_file)
-            content = "\n".join([para.text for para in doc.paragraphs])
-            if not content.strip():
-                content = f"Dokumen Word {filename} (tidak dapat mengekstrak teks)."
-        elif ext == '.txt':
-            content = file.read().decode('utf-8', errors='ignore')
-        else:
-            content = f"Dokumen {ext.upper()} dengan nama berkas {filename}. Berisi informasi terstruktur yang diunggah oleh pengguna."
+        content = extract_text_from_file_object(file, filename)
             
-        return jsonify({"status": "success", "content": content, "filename": filename})
+        # PROSES INGESTI (Vektor & Label)
+        doc_vector = get_onnx_embedding(content)
+        
+        # Prediksi Label (L1 & L2) sama seperti Endpoint /api/predict
+        text_lower = content.lower()
+        stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
+        
+        # Predict L2
+        l2_raw_sims = []
+        for label in TAXONOMY.get("Layer_2_Detail", []):
+            lbl_vector = get_onnx_embedding(label)
+            sim = get_cosine_similarity(doc_vector, lbl_vector)
+            l2_raw_sims.append(sim)
+            
+        for i, label in enumerate(TAXONOMY.get("Layer_2_Detail", [])):
+            text_words = set(text_lower.split())
+            label_words = set(label.lower().split())
+            overlap = sum(1.0 for w in text_words.intersection(label_words) if w not in stop_words)
+            l2_raw_sims[i] = l2_raw_sims[i] * 1.0 if overlap > 0.5 else l2_raw_sims[i] * 0.80
+            if l2_raw_sims[i] < 0.35: l2_raw_sims[i] = 0.0
+            
+        best_l2 = "Tidak Terklasifikasi"
+        if l2_raw_sims and max(l2_raw_sims) > 0.0:
+            best_l2 = TAXONOMY["Layer_2_Detail"][np.argmax(l2_raw_sims)]
+
+        # Predict L1
+        l1_raw_sims = []
+        for label in TAXONOMY.get("Layer_1_Domain", []):
+            lbl_vector = get_onnx_embedding(label)
+            sim = get_cosine_similarity(doc_vector, lbl_vector)
+            l1_raw_sims.append(sim)
+            
+        for i, label in enumerate(TAXONOMY.get("Layer_1_Domain", [])):
+            text_words = set(text_lower.split())
+            label_words = set(label.lower().split())
+            overlap = sum(1.0 for w in text_words.intersection(label_words) if w not in stop_words)
+            l1_raw_sims[i] = l1_raw_sims[i] * 1.0 if overlap > 0.5 else l1_raw_sims[i] * 0.80
+            if l1_raw_sims[i] < 0.30: l1_raw_sims[i] = 0.0
+            
+        best_l1 = "Tidak Terklasifikasi"
+        if l1_raw_sims and max(l1_raw_sims) > 0.0:
+            best_l1 = TAXONOMY["Layer_1_Domain"][np.argmax(l1_raw_sims)]
+            
+        labels_json = json.dumps([best_l1, best_l2])
+        vector_json = json.dumps(doc_vector.tolist())
+        
+        # INSERT KE DB
+        conn = sqlite3.connect(active_db_path)
+        c = conn.cursor()
+        try:
+            c.execute("INSERT INTO documents (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
+                      (filename, content, labels_json, vector_json))
+            conn.commit()
+        except sqlite3.IntegrityError:
+            # Jika filename sudah ada, kita update saja
+            c.execute("UPDATE documents SET content=?, labels=?, embedding=? WHERE filename=?",
+                      (content, labels_json, vector_json, filename))
+            conn.commit()
+        conn.close()
+            
+        return jsonify({
+            "status": "success", 
+            "content": content, 
+            "filename": filename,
+            "labels": [best_l1, best_l2]
+        })
     except Exception as e:
+        log_error("Ingestion API", f"Gagal memproses file {file.filename}: {str(e)}", exc=True)
         return jsonify({"error": f"Gagal memproses file: {str(e)}"})
 
 @app.route("/api/labels", methods=["GET"])
@@ -807,6 +864,7 @@ def edit_label():
             
         return jsonify({"status": "success", "message": f"Berhasil memperbarui label '{old_name}' menjadi '{new_name}' pada {updated} berkas!"})
     except Exception as e:
+        log_error("Label Editor", f"Gagal memperbarui label {old_name}: {str(e)}", exc=True)
         return jsonify({"status": "error", "message": f"Gagal memperbarui label: {e}"})
 
 @app.route("/api/labels/delete", methods=["POST"])
@@ -844,6 +902,7 @@ def delete_label():
             
         return jsonify({"status": "success", "message": f"Berhasil menghapus label '{lbl_to_delete}' dari {updated} berkas!"})
     except Exception as e:
+        log_error("Label Deleter", f"Gagal menghapus label {lbl_to_delete}: {str(e)}", exc=True)
         return jsonify({"status": "error", "message": f"Gagal menghapus label: {e}"})
 
 @app.route("/api/labels/add", methods=["POST"])
@@ -869,19 +928,123 @@ def add_label():
             
     return jsonify({"status": "success", "message": f"Berhasil menambahkan '{new_lbl}' ke taksonomi aktif!"})
 
-@app.route("/api/labels/regenerate", methods=["POST"])
-def regenerate_labels():
-    global relabel_progress
-    if relabel_progress["status"] == "running":
-        return jsonify({"status": "error", "message": "Proses regenerasi label sedang berjalan"})
-        
-    t = threading.Thread(target=async_relabel_task, args=(active_db_path, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"]))
-    t.start()
-    return jsonify({"status": "success", "message": "Batch regenerasi label ONNX dimulai"})
+from sklearn.cluster import KMeans
+from sklearn.feature_extraction.text import TfidfVectorizer
 
-@app.route("/api/labels/regenerate/progress", methods=["GET"])
-def get_regenerate_progress():
-    return jsonify(relabel_progress)
+@app.route("/api/taxonomy/generate", methods=["POST"])
+def generate_taxonomy():
+    global TAXONOMY
+    try:
+        conn = sqlite3.connect(active_db_path)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, content, embedding FROM documents WHERE embedding IS NOT NULL")
+        rows = cursor.fetchall()
+        
+        N = len(rows)
+        if N == 0:
+            conn.close()
+            return jsonify({"status": "error", "message": "Database kosong atau belum ada dokumen untuk dianalisis."})
+            
+        # RUMUS RICE RULE
+        X = math.ceil(2 * (N ** (1/3)))
+        n_clusters_l2 = min(X, N)
+        
+        ids = [r[0] for r in rows]
+        contents = [r[1] for r in rows]
+        
+        embeddings = []
+        for r in rows:
+            emb = np.array(json.loads(r[2]))
+            if len(emb) != 384:
+                emb = get_onnx_embedding(r[1])
+            embeddings.append(emb)
+        embeddings = np.array(embeddings)
+        
+        # 1. K-Means Layer 2 (Detail)
+        kmeans_l2 = KMeans(n_clusters=n_clusters_l2, random_state=42, n_init="auto")
+        cluster_l2_assignments = kmeans_l2.fit_predict(embeddings)
+        
+        # Ekstraksi Kata Kunci menggunakan TF-IDF
+        try:
+            vectorizer = TfidfVectorizer(max_df=0.8, min_df=2, stop_words=["dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"])
+            tfidf_matrix = vectorizer.fit_transform(contents)
+        except:
+            vectorizer = TfidfVectorizer()
+            tfidf_matrix = vectorizer.fit_transform(contents)
+            
+        feature_names = vectorizer.get_feature_names_out()
+        layer_2_labels = []
+        l2_cluster_to_label = {}
+        
+        for i in range(n_clusters_l2):
+            cluster_docs_idx = np.where(cluster_l2_assignments == i)[0]
+            if len(cluster_docs_idx) == 0:
+                l2_cluster_to_label[i] = f"Cluster {i}"
+                continue
+                
+            cluster_tfidf = tfidf_matrix[cluster_docs_idx].sum(axis=0)
+            cluster_tfidf = np.squeeze(np.asarray(cluster_tfidf))
+            
+            top_indices = cluster_tfidf.argsort()[::-1][:2]
+            top_words = [feature_names[idx].title() for idx in top_indices]
+            label_name = " ".join(top_words)
+            
+            if not label_name:
+                label_name = f"Cluster {i}"
+                
+            layer_2_labels.append(label_name)
+            l2_cluster_to_label[i] = label_name
+            
+        # 2. K-Means Layer 1 (Domain) berdasarkan pusat cluster Layer 2
+        l2_centroids = kmeans_l2.cluster_centers_
+        n_clusters_l1 = max(3, math.ceil(math.sqrt(n_clusters_l2)))
+        n_clusters_l1 = min(n_clusters_l1, n_clusters_l2)
+        
+        kmeans_l1 = KMeans(n_clusters=n_clusters_l1, random_state=42, n_init="auto")
+        cluster_l1_assignments = kmeans_l1.fit_predict(l2_centroids)
+        
+        layer_1_labels = []
+        l1_cluster_to_label = {}
+        
+        for i in range(n_clusters_l1):
+            l2_indices = np.where(cluster_l1_assignments == i)[0]
+            if len(l2_indices) == 0:
+                l1_cluster_to_label[i] = f"Domain {i}"
+                continue
+            
+            # Ambil perwakilan kata dari sub-cluster terbesarnya
+            representative_l2 = layer_2_labels[l2_indices[0]]
+            l1_label_name = f"Domain {representative_l2.split()[0]}"
+            layer_1_labels.append(l1_label_name)
+            l1_cluster_to_label[i] = l1_label_name
+            
+        # Update TAXONOMY
+        TAXONOMY["Layer_1_Domain"] = list(set(layer_1_labels))
+        TAXONOMY["Layer_2_Detail"] = list(set(layer_2_labels))
+        save_taxonomy(active_db_type, TAXONOMY)
+        
+        # 3. Relabeling dokumen di Database
+        for idx, doc_id in enumerate(ids):
+            l2_cluster = cluster_l2_assignments[idx]
+            l1_cluster = cluster_l1_assignments[l2_cluster]
+            
+            lbl_l2 = l2_cluster_to_label[l2_cluster]
+            lbl_l1 = l1_cluster_to_label[l1_cluster]
+            
+            labels_json = json.dumps([lbl_l1, lbl_l2])
+            cursor.execute("UPDATE documents SET labels = ? WHERE id = ?", (labels_json, doc_id))
+            
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            "status": "success",
+            "message": f"K-Means selesai. Rumus Rice (X={n_clusters_l2}) diterapkan.",
+            "taxonomy": TAXONOMY
+        })
+    except Exception as e:
+        log_error("Taxonomy Generator", f"Gagal generate taxonomy: {str(e)}", exc=True)
+        return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/api/reset_db", methods=["POST"])
 def reset_database():
@@ -913,6 +1076,7 @@ def reset_database():
             
         return jsonify({"status": "success", "message": "Database berhasil di-reset dan dibangkitkan ulang secara bersih!"})
     except Exception as e:
+        log_error("DB Reset", f"Gagal mereset database: {str(e)}", exc=True)
         return jsonify({"status": "error", "message": f"Gagal mereset database: {e}"})
 
 if __name__ == "__main__":
