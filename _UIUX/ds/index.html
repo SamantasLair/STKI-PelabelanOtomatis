@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DS - Command Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Georgia&family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/css/variables.css">
+    <link rel="stylesheet" href="/shared/css/layout.css">
+    <link rel="stylesheet" href="/shared/css/components.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header" style="background-color: var(--color-danger); color: var(--color-paper);">
+                <h1 style="color: var(--color-paper);">DS COMMAND</h1>
+                <div style="font-family: var(--font-mono); font-size: 0.65rem; margin-top: 4px;">DATA SCIENCE TERMINAL</div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a class="nav-item active" data-target="view-taxonomy">I. Dynamic Taxonomy (K-Means)</a>
+                <a class="nav-item" data-target="view-prep">II. Distribusi & Prep Data</a>
+                <a class="nav-item" data-target="view-looker">III. Integrasi Looker Studio</a>
+                <a href="/stki" class="nav-item" style="color: var(--color-warn); margin-top: auto; border-top: 1px solid var(--color-border);">[SWITCH TO STKI END-USER]</a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div id="status-engine">ENGINE: OFFLINE</div>
+                <div id="status-model">MODEL: SOTA MINILM L-12</div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-telemetry">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">DATABASE:</span>
+                        <select id="select-db" class="telemetry-value" style="width:auto; padding:2px 4px;">
+                            <option value="akademik">AKADEMIK</option>
+                            <option value="politik">POLITIK</option>
+                            <option value="ekonomi">EKONOMI</option>
+                            <option value="bisnis">BISNIS</option>
+                            <option value="etika">ETIKA</option>
+                            <option value="demo_real">DEMO REAL</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="topbar-telemetry">
+                    <div class="telemetry-item">
+                        <span class="telemetry-label">DIMENSIONALITY:</span>
+                        <span class="telemetry-value">384-D (DENSE)</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="workspace">
+                
+                <!-- View 1: Interactive Data Pipeline -->
+                <section id="view-taxonomy" class="tab-pane active">
+                    <div class="ledger-box">
+                        <div class="ledger-header">ARCHITECTURE & PIPELINE GRAPH</div>
+                        <div class="ledger-body" style="background-color: var(--color-bg);">
+                            <div class="pipeline-graph">
+                                <div class="pipeline-node active-node" id="node-db" title="Klik untuk membuka Database Explorer">
+                                    <div class="pipeline-icon">🗄️</div>
+                                    <div class="pipeline-label">Data Source</div>
+                                </div>
+                                <div class="pipeline-edge" id="edge-1"></div>
+                                <div class="pipeline-node" id="node-onnx" title="Model ONNX 384D">
+                                    <div class="pipeline-icon">🧠</div>
+                                    <div class="pipeline-label">ONNX Extractor</div>
+                                </div>
+                                <div class="pipeline-edge" id="edge-2"></div>
+                                <div class="pipeline-node" id="node-kmeans" title="Klik untuk memicu algoritma K-Means">
+                                    <div class="pipeline-icon">⚙️</div>
+                                    <div class="pipeline-label">K-Means Engine</div>
+                                </div>
+                                <div class="pipeline-edge" id="edge-3"></div>
+                                <div class="pipeline-node" id="node-taxonomy" title="Lihat daftar Taksonomi">
+                                    <div class="pipeline-icon">📄</div>
+                                    <div class="pipeline-label">Taxonomy Tree</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dynamic Panels Based on Node Selection -->
+                    
+                    <!-- Panel: Database Explorer (Active by default) -->
+                    <div id="panel-db" class="ledger-box node-panel">
+                        <div class="ledger-header">
+                            <span>DATABASE EXPLORER (DOKUMEN RAW)</span>
+                            <span id="db-explorer-count" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">0 DOKUMEN</span>
+                        </div>
+                        <div class="ledger-body" style="padding: 0; display: flex; height: 500px;">
+                            <!-- Left: List -->
+                            <div id="db-explorer-list" style="width: 40%; border-right: 1px solid var(--color-border); overflow-y: auto;">
+                                <div class="empty-state">MEMUAT DOKUMEN...</div>
+                            </div>
+                            <!-- Right: Preview -->
+                            <div id="db-explorer-preview" style="width: 60%; padding: var(--spacing-md); overflow-y: auto; background-color: var(--color-bg);">
+                                <div class="empty-state">PILIH DOKUMEN UNTUK MELIHAT ISI</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Panel: ONNX Extractor -->
+                    <div id="panel-onnx" class="ledger-box node-panel" style="display: none;">
+                        <div class="ledger-header">ONNX DIMENSIONALITY & PRE-PROCESSING</div>
+                        <div class="ledger-body">
+                            <p style="font-family: var(--font-mono); font-size: 0.9rem;">Dimensi Model: 384-D (Dense Vector)</p>
+                            <p style="font-family: var(--font-mono); font-size: 0.9rem;">Model Path: STKI/onnx_model/multi_label_model.onnx</p>
+                            <p style="font-family: var(--font-mono); font-size: 0.9rem;">Status: ONNX Runtime Active</p>
+                        </div>
+                    </div>
+
+                    <!-- Panel: K-Means Engine -->
+                    <div id="panel-kmeans" class="ledger-box node-panel" style="display: none;">
+                        <div class="ledger-header">
+                            <span>TEORI RICE RULE (X = ⌈ 2 · N^1/3 ⌉)</span>
+                            <span id="taxonomy-telemetry" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">N: 0 | TARGET RICE: 0</span>
+                        </div>
+                        <div class="ledger-body">
+                            <button class="btn btn-danger btn-block" id="btn-generate-taxonomy">EKSEKUSI K-MEANS + TF-IDF SEKARANG</button>
+                            <div id="taxonomy-terminal" class="terminal-progress" style="display:none; padding: var(--spacing-sm); margin-top: var(--spacing-sm); background: var(--color-bg); border: 1px solid var(--color-border);"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Panel: Taxonomy Tree -->
+                    <div id="panel-taxonomy" class="ledger-box node-panel" style="display: none;">
+                        <div class="ledger-header">INDEKS TAKSONOMI DINAMIS AKTIF</div>
+                        <div class="ledger-body" id="taxonomy-list">
+                            <div class="empty-state">MEMUAT...</div>
+                        </div>
+                    </div>
+
+                </section>
+
+                <!-- View 2: Distribusi & Prep Data -->
+                <section id="view-prep" class="tab-pane">
+                    <div class="ledger-box">
+                        <div class="ledger-header">DISTRIBUSI KELAS & KESIAPAN DATA (COMING SOON)</div>
+                        <div class="ledger-body" style="height: 400px; display: flex; align-items: center; justify-content: center; background-color: var(--color-bg);">
+                            <div style="font-family: var(--font-mono); font-size: 1.2rem; color: var(--color-ink-muted); text-align: center;">
+                                <div style="font-size: 3rem; margin-bottom: 20px;">📊</div>
+                                Modul Analisis Distribusi Data sedang dalam tahap pengembangan.<br>
+                                Akan menampilkan grafik persebaran dokumen per kategori.
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- View 3: Looker Embed -->
+                <section id="view-looker" class="tab-pane">
+                    <div class="ledger-box">
+                        <div class="ledger-header">GOOGLE LOOKER STUDIO / ONLOOKER EMBED</div>
+                        <div class="ledger-body" style="height: 600px; display: flex; align-items: center; justify-content: center; background-color: var(--color-highlight);">
+                            <div style="font-family: var(--font-mono); font-size: 1.2rem; color: var(--color-ink-muted);">
+                                [IFRAME SLOT FOR LOOKER DASHBOARD]
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Shared JS -->
+    <script src="/shared/js/apiService.js"></script>
+    <script src="/shared/js/uiHelpers.js"></script>
+    
+    <!-- DS MVVM -->
+    <script src="/ds/js/views/taxonomyView.js"></script>
+    <script src="/ds/js/viewmodels/taxonomyVM.js"></script>
+    <script src="/ds/js/app.js"></script>
+</body>
+</html>
