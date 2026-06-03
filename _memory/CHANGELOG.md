@@ -1,6 +1,75 @@
 # CHANGELOG
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
+
+## [v4.8.2] - 2026-05-30
+### Fixed
+- **Existential Short-Circuiting (JSON1 Offloading)**: Memperbaiki kerentanan *OOM (Out-of-Memory)* kritis pada antarmuka GUI Desktop (`app_gui.py`) dan Backend Web (`app_web.py`). Sebelumnya, operasi `edit_label`, `delete_label`, dan `load_labels` melakukan *Full Table Scan* dan mem-parsing JSON secara iteratif di ruang memori Python. Operasi ini secara penuh didelegasikan ke *C-Engine SQLite* menggunakan klausa `EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?)` dan agregasi `SELECT DISTINCT json_each.value`. Ini menyempurnakan implementasi *BIG DATA DOCTRINE*, mengeliminasi *server freeze*, dan memangkas waktu load secara asimtotik.
+- **Pre-fetch Filtering (Anti-OOM Search)**: Menambal celah pada `run_text_search` GUI (`app_gui.py`) yang sebelumnya menarik seluruh matriks Vektor dan Teks ke dalam memori Python. Ditambahkan kondisi pra-filter `WHERE content LIKE ?` untuk menciutkan ukuran ekstraksi database dari $O(N)$ ke $O(k)$ sebelum penghitungan BM25 lokal dieksekusi.
+- **Missing Embedding Column Error**: Memperbaiki anomali komputasi `no such column: embedding` saat memuat pangkalan data besar (seperti `db_alkitab.db`). Memperbarui skema di `seed_alkitab.py` agar secara konsisten mendefinisikan *dense vector column* meskipun kosong, demi keamanan *pipeline*.
+
+### Added
+- **Asynchronous Telemetry Progress Animation**: Mengatasi *blind wait* pada eksekusi Clustering puluhan ribu dokumen di Command Center Data Science. Membangun API `GET /api/taxonomy/progress` yang secara pasif melacak state iterasi *backend*, dipadukan dengan *Javascript Interval Polling* di `taxonomyVM.js`. Hasilnya dirender sebagai animasi retro-mekanis *Neobrutalism* (`▖ SEDANG MEMPROSES... █░░░░░░░`) di layar *terminal* UI, memberi *feedback* progesif tanpa membebani performa *browser*.
+- **NameError Hotfix (Double-Crash Prevention)**: Mengidentifikasi dan memperbaiki insiden `JSON.parse unexpected character` yang terjadi karena *double-crash* pada `app_web.py`: ketiadaan variabel lokal `active_db_type` pada saat inisialisasi RAM cache yang disusul oleh pemanggilan log fungsi `log_error` yang tidak terdefinisi pada *exception handler*. Flask kini berhasil dikembalikan pada rute penanganan JSON murni tanpa membocorkan HTML 500 *Internal Server Error*.
+
+## [v4.8.1] - 2026-05-29
+### Added
+- **Server Memory-Safe First Doctrine**: Menetapkan doktrin arsitektural ekstrem ke dalam `skalabilitas_database_stki.md` di mana sistem secara mutlak dilarang memuat korpus teks masif secara keseluruhan ke dalam RAM Python (*Server OOM Prevention*). Segala logika manipulasi *display* diserahkan ke *Client-Side*.
+- **Anti-OOM Server-Side Pagination**: Merombak total *endpoint* `/api/documents` di `app_web.py` dari `LIMIT 500` statis menjadi sistem paginasi dinamis (`page`, `limit`, `filter`). 
+- **BIG DATA DOCTRINE (SQLite JSON1 Offloading)**: Mencabut logika iterasi dan *parsing array* JSON di RAM Python pada filter *Outlier* dan *Overlap*. Seluruh proses *filtering* skala mahadata (puluhan ribu dokumen) kini dilempar secara eksklusif ke *C-Engine SQLite* menggunakan fungsi native `json_each` dan `json_array_length`. Hal ini memicu evaluasi struktural tingkat rendah (assembly-level B-Tree bypass) tanpa menyentuh *Python Heap Memory*, menekan latensi menjadi titik nyaris nol ($O(1)$) untuk setiap kueri agregat atau paginasi data.
+- **JSON Parser Annihilation (Zero-Latency Load)**: Memusnahkan rutinitas `SELECT labels FROM documents` yang diam-diam mengekstrak dan mem- *parsing* 30.000+ objek JSON pada *endpoint* `/api/status` dan `/api/labels`. Kalkulasi ini telah digeser seutuhnya ke (1) Pencarian Hash Memori $O(1)$ untuk hitungan total, dan (2) C-Engine SQLite `COUNT() LIKE` untuk distribusi label. Ini memusnahkan hambatan utama yang menyebabkan GUI *freeze* selama berpuluh detik saat berpindah pangkalan data.
+- **Neo-Ledger Pagination Controls**: Menambahkan kontrol tombol navigasi halaman (`< PREV` | `PAGE X / Y` | `NEXT >`) pada antarmuka *Database Explorer* (`taxonomyView.js`) dengan gaya mekanis *Neobrutalism* yang langsung menembak API backend tanpa *Client-Side Freeze*. Dilengkapi dengan "Progress Loader Mekanis" untuk memberikan umpan balik taktil saat transisi dokumen masif.
+
+## [v4.8.0] - 2026-05-29
+- **Taxonomy Relational Migration**: Memigrasikan sistem penyimpanan taksonomi (`taxonomy_dynamic.json`) ke tabel SQLite (`taxonomy_labels`) secara penuh. Arsitektur model tetap menggunakan Zero-Shot Dense Retrieval dan Flat Venn, namun manajemen data beralih ke Database Management System murni untuk stabilitas dan skalabilitas.
+- **LocalStorage Thresholds**: Mengimplementasikan `localStorage` API untuk nilai parameter Cosine Threshold L1 dan L2. Nilai kini persisten meskipun peramban dimuat ulang.
+
+### Features
+- **Mass Replace (Re-embedding Scan)**: Menambahkan fitur Edit dan Delete pada taksonomi. Mengedit atau menghapus nama label akan secara otomatis memicu `async_relabel_task` di latar belakang (Background Thread) untuk memindai ulang seluruh basis data dokumen tanpa hambatan UI.
+- **Taxonomy CRUD Ledger**: Merombak tampilan "Manual Taxonomy Editor" menjadi tabel *Ledger* dua kolom penuh dengan fungsi Tambah, Edit (via prompt), dan Hapus dengan animasi taktil Neobrutalism.
+
+## [v4.7.5] - 2026-05-28
+### Added
+- **Tactile Wobble Animations**: Mengubah perilaku *hover* statis (yang miring terus-menerus) menjadi animasi dinamis `tactileWobble` pada `.btn`, `.tag`, `.pipeline-node`, `.node-panel`, dan `input:focus`. Elemen kini bergetar (*wobble*) acak (bergantian kiri/kanan berdasarkan *pseudo-class* `nth-child(even)`) dan akan kembali lurus (`0deg`) jika kursor tetap berada di dalamnya, menciptakan *feedback* mekanis yang kuat tanpa merusak keterbacaan teks saat *hover* panjang.
+
+## [v4.7.4] - 2026-05-28
+### Fixed
+- **NameError `MEMORY_DIR` Resolution**: Memperbaiki NameError kritis pada `app_web.py` baris 39 di mana variabel `MEMORY_DIR` dipanggil sebelum didefinisikan. Mendeklarasikan `MEMORY_DIR = os.path.join(ROOT_DIR, "_memory")` secara eksplisit pada blok Konfigurasi Path untuk memastikan inisialisasi awal (*boot sequence*) Flask dapat menemukan taksonomi dinamis tanpa memicu *server crash*.
+
+## [v4.7.0] - Multi-Label Venn Architecture
+### Architecture & Algorithmic Shift
+- **[TRANSITION]** Beralih dari *Hard Clustering* (K-Means Mutlak) ke *Soft Clustering* (Multi-Label Cosine Thresholding). Sebuah dokumen kini dapat memiliki banyak label lintas domain (Venn Diagram) atau tidak memiliki label (Outlier Fallback). Algoritma K-Means kini hanya digunakan murni untuk penemuan topik (*Topic Discovery*).
+- **[FINETUNING UI]** Menambahkan panel Finetuning di DS Command Center untuk mengatur `Threshold L1` (Domain) dan `Threshold L2` (Detail) secara leluasa dengan nilai dasar `0.50` merujuk pada teori *Vector Space Model*.
+- **[VISUAL CLUTTER PREVENTION]** Menolak penggunaan diagram Venn literal bertumpuk secara visual. Sistem diimplementasikan menggunakan arsitektur *Tag Pills* (Multi-Badge per dokumen) layaknya sistem kurasi *Enterprise* modern.
+
+### UI/UX Refactoring
+- **[SYSTEM WIDE STYLE]** Mengimplementasikan gaya **Refined Retro Ledger (Neobrutalism)** pada `components.css`. Seluruh tombol, panel, dan *slider* kini menggunakan bayangan hitam solid (*Hard Shadow*) `2px 2px 0px` dengan animasi tekan mekanis. Skema warna retro dipertahankan (tinta di atas kertas) namun struktur fisiknya mengadopsi ketegasan panel komik 80-an tanpa merusak hierarki akademik.
+- **[CUSTOM CSS CONTROLS]** Menghapus UI asli peramban (*browser default*) untuk *Slider* (`input[type=range]`) dan *Tooltip* bawaan OS. Menggantinya dengan balok mekanis dan kotak dialog komik yang sepenuhnya ditenagai oleh *CSS pseudo-elements*.
+- **[NATIVE POPUP ERADICATION]** Menghapus penggunaan fungsi `confirm()` bawaan Windows/Browser yang merusak *immersion* desain, dan menggantinya dengan Custom Neo-Modal yang konsisten secara arsitektural. Emoji biru `ℹ️` juga telah dibasmi dan diganti dengan elemen CSS `<span class="info-badge">?</span>`.
+- [ENGINE REBRANDING] Mengubah nama *node* di grafik *pipeline* dari "K-MEANS ENGINE" menjadi "COSINE ENGINE" agar tidak menyesatkan pengguna, sejalan dengan pergeseran arsitektur *Multi-Label Cosine Thresholding*.
+
+## [v4.7.1] - 2026-05-28
+### Fixed
+- **Multi-Label Logic Correction (Argmax Purge)**: Menghapus paksaan `np.argmax()` pada fungsi `async_relabel_task`, `/api/predict`, dan `/api/ingest` di `app_web.py`. `argmax` secara matematis merusak *Venn Architecture* karena mendelegasikan tugas ke sistem *Multi-Class*. Dokumen kini secara sah mengakumulasi semua klasifikasi yang melebihi ambang batas $\tau_1$ (L1) dan $\tau_2$ (L2). Rujukan: Teori *Tsoumakas & Katakis*.
+- **Threshold Visual Feedback (Telemetry Matrix)**: Menambahkan metrik **Cardinality & Overlap Telemetry** bergaya *Hard-Shadowed Ledger* pada DS Command Center (`index.html`). Menampilkan nilai persentase irisan *Venn Overlaps* ($>1$ Label) dan anomali *Outliers* ($0$ Label) pasca-eksekusi *Cosine Engine* untuk validasi *threshold tuning*.
+- **UX Inconsistency Fix**: Mengganti dialog `confirm()` bawaan browser yang merusak imersi visual pada `wipeDatabase()` dan `deleteLabel()` (`taxonomyVM.js`) menggunakan *Neobrutalist* `UIHelpers.showCustomModal()`.
+
+## [v4.7.3] - 2026-05-28
+### Added
+- **In-Memory Semantic Caching (Latency Optimization)**: Menyematkan sistem *LRU Cache* dan *Hash-Mapped Dictionary* (`DB_EMBEDDING_CACHE`) murni berbasis RAM di backend (`app_web.py`). Model tidak lagi melempar beban disk I/O untuk mem- *parsing* JSON *Dense Vector* dari SQLite berulang kali pada setiap operasi `search` dan `recommend`. Begitu pula, ekstraksi vektor ONNX untuk *query* pengguna akan melewati model jika teks yang sama sudah ada di *cache*. Kompleksitas memori berhasil ditransformasikan dari $O(N)$ akses disk berantai menjadi $O(1)$ *RAM Access* yang masif mempercepat *Zero-Latency Hybrid Search*.
+
+### Changed
+- **Foundation Sync (Arsitektur Pemrosesan)**: Menyelaraskan ulang dokumen `_fondasi/arsitektur_pemrosesan_stki.md` dengan mekanisme terbaru. Referensi tentang pengikatan label tunggal telah disingkirkan dan dicatatkan sebagai implementasi **Murni Cosine Thresholding**, dipadukan dengan dokumentasi eksistensi *Telemetry Matrix*.
+
+## [v4.7.2] - 2026-05-28
+### Fixed
+- **Dynamic Threshold Synchronization (Algorithmic Integrity)**: Memperbaiki celah matematis di mana fungsi prediktif asinkronus (`async_relabel_task`) dan endpoint harian (`/api/predict`, `/api/ingest`) secara diam-diam memaksa penggunaan nilai threshold L1/L2 yang di-*hardcode* ($0.30$ dan $0.35$). Sistem kini mengekstraksi dan menggunakan status nilai threshold terakhir yang di-set dari UI *Command Center* secara dinamis via `TAXONOMY`.
+- **SQLite Database Locked (Race Condition Preventative)**: Menginjeksi parameter `timeout=15` pada seluruh instansiasi `sqlite3.connect()` di `app_web.py`. SQLite kini secara otomatis mengantre eksekusi baca/tulis (*Time-Based Lock Waiting*) alih-alih melempar interupsi `OperationalError: database is locked` saat modul `async_relabel_task` bertabrakan dengan aktivitas unggah dokumen.
+
+### Added
+- **Looker Studio Iframe (Enterprise Integrator)**: Menghidupkan tab *Enterprise Dashboard* pada panel DS dengan input parameter khusus. Menyuntikkan fungsionalitas rendering *iframe* berdasar tautan yang secara otonom menyimpannya secara persisten ke dalam `localStorage` tanpa merusak pakem elemen batas Neobrutalism.
+- **Client-Side Outlier & Overlap Filtering (Telemetry Explorer)**: Mengintegrasikan tuas saring (*Dropdown Filter*) pada antarmuka *Database Explorer* (`taxonomyView.js`). Ilmuwan data kini dapat memilah dokumen berdasarkan status *Outlier* (0 Label) atau *Overlap* (>1 Label) secara *zero-latency* dari kumpulan array 500 dokumen terakhir tanpa menumbuk *query backend* (`WHERE labels = '[]'`).
+
 ## [v4.6.0] - 2026-05-27
 ### Added
 - **Database Management UI**: Menambahkan tab khusus "DATABASE MANAGEMENT & PREP" pada ruang DS Command Center yang memuat instrumen mutlak untuk manipulasi pangkalan data (*Batch Data Ingestion via Drag-and-Drop*, *Wipe Database*, dan *Manual Taxonomy Editor*).

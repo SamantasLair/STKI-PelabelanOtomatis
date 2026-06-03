@@ -19,13 +19,27 @@ const SearchView = {
         let html = '';
         docs.forEach((doc, idx) => {
             const rank = String(idx + 1).padStart(2, '0');
-            const tags = doc.labels.map(l => `<span class="tag">${l}</span>`).join('');
+            
+            // Map label ke kelas premium (L1 / L2) berdasarkan taxonomy state
+            const tags = doc.labels.map(l => {
+                const isOutlier = (l === 'Tidak Terklasifikasi');
+                let tagClass = 'tag';
+                if (!isOutlier && window._globalTaxonomy) {
+                    const l1 = window._globalTaxonomy.Layer_1_Domain || [];
+                    if (l1.includes(l)) tagClass = 'tag tag-l1';
+                    else tagClass = 'tag tag-l2';
+                }
+                const styleAttr = isOutlier ? 'style="color:var(--color-danger); border-color:var(--color-danger);"' : '';
+                return `<span class="${tagClass}" ${styleAttr}>${l}</span>`;
+            }).join('');
+            
+            const displayTitle = doc.filename || (doc.content.includes(' - ') ? doc.content.split(' - ')[0] : 'ARSIP TAK BERNAMA');
             
             html += `
                 <div class="ledger-row">
                     <div class="row-col col-rank">[${rank}]</div>
                     <div class="row-col col-main">
-                        <div class="doc-title">${doc.filename}</div>
+                        <div class="doc-title">${displayTitle}</div>
                         <div class="doc-snippet">${doc.content.substring(0, 150)}...</div>
                         <div class="tag-list">${tags}</div>
                     </div>

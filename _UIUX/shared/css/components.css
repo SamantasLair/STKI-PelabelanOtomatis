@@ -12,27 +12,51 @@ input, select, textarea {
     outline: none;
     width: 100%;
     box-sizing: border-box;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
 input:focus, select:focus, textarea:focus {
     border-color: var(--color-ink);
     background-color: #fff;
+    box-shadow: 4px 4px 0px var(--color-ink);
+    --hov-x: -2px;
+    --hov-y: -2px;
+    --hov-rot: 1.5deg;
+    animation: tactileWobble 0.4s ease-out forwards;
 }
 
-/* Buttons */
+/* Buttons (Refined Retro Ledger) */
 .btn {
     display: inline-block;
     font-family: var(--font-body);
     font-weight: 700;
     text-transform: uppercase;
     padding: var(--spacing-sm) var(--spacing-lg);
-    border: var(--border-width-thick) solid var(--color-border);
+    border: 2px solid var(--color-ink); /* Sharp thin border */
     background-color: var(--color-bg);
     color: var(--color-ink);
     cursor: pointer;
     border-radius: var(--border-radius);
-    transition: background-color 0.2s, color 0.2s;
     letter-spacing: 0.5px;
+    box-shadow: 2px 2px 0px var(--color-ink); /* Hard shadow */
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy transition */
+}
+
+.btn:hover {
+    box-shadow: 4px 5px 0px var(--color-ink);
+    --hov-x: -1px;
+    --hov-y: -2px;
+    --hov-rot: 1.5deg;
+    animation: tactileWobble 0.4s ease-out forwards;
+}
+
+.btn:nth-child(even):hover {
+    animation: tactileWobbleAlt 0.4s ease-out forwards;
+}
+
+.btn:active {
+    transform: translate(2px, 2px) rotate(0deg); /* Mechanical press */
+    box-shadow: 0px 0px 0px var(--color-ink);
 }
 
 .btn-primary {
@@ -51,7 +75,7 @@ input:focus, select:focus, textarea:focus {
 .btn-danger {
     background-color: var(--color-danger);
     color: var(--color-paper);
-    border-color: var(--color-danger);
+    border-color: var(--color-ink); /* Keep border ink for retro style */
 }
 
 .btn-danger:hover {
@@ -63,11 +87,34 @@ input:focus, select:focus, textarea:focus {
     display: block;
 }
 
-/* Ledger Table / List */
+/* Ledger Table / List (Refined Retro Ledger) */
 .ledger-box {
-    border: var(--border-width-thick) solid var(--color-border);
+    border: 2px solid var(--color-ink);
     background-color: var(--color-paper);
     margin-bottom: var(--spacing-md);
+    box-shadow: 4px 4px 0px var(--color-ink);
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.ledger-box.node-panel:hover {
+    box-shadow: 6px 6px 0px var(--color-ink);
+    --hov-x: -1px;
+    --hov-y: -2px;
+    --hov-rot: 1deg;
+    animation: tactileWobble 0.4s ease-out forwards;
+}
+
+.ledger-box.node-panel:nth-child(even):hover,
+.ledger-box.interactive-panel:nth-child(even):hover {
+    animation: tactileWobbleAlt 0.4s ease-out forwards;
+}
+
+.ledger-box.interactive-panel:hover {
+    box-shadow: 6px 6px 0px var(--color-ink);
+    --hov-x: -1px;
+    --hov-y: -2px;
+    --hov-rot: 1deg;
+    animation: tactileWobble 0.4s ease-out forwards;
 }
 
 .ledger-header {
@@ -141,9 +188,44 @@ input:focus, select:focus, textarea:focus {
     border: 1px solid var(--color-border);
     background-color: var(--color-bg);
     text-transform: uppercase;
+    transition: all 0.15s ease-out;
+    display: inline-block;
+}
+
+.tag:hover {
+    box-shadow: 2px 2px 0px var(--color-ink);
+    --hov-x: -1px;
+    --hov-y: -2px;
+    --hov-rot: 2deg;
+    animation: tactileWobble 0.4s ease-out forwards;
+}
+
+.tag-l1 {
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    border: 1px solid var(--color-ink);
+    border-bottom: 2px solid var(--color-ink);
+    font-weight: 700;
+    box-shadow: 1px 1px 0px var(--color-ink);
+}
+
+.tag-l2 {
+    background-color: var(--color-bg);
+    color: var(--color-ink-muted);
+    border: 1px solid var(--color-border);
+    font-weight: 600;
+}
+
+.tag:nth-child(even):hover {
+    animation: tactileWobbleAlt 0.4s ease-out forwards;
 }
 
 /* Progress / Telemetry Bar */
+.tooltip-trigger {
+    cursor: help;
+    border-bottom: 1px dotted var(--color-ink-muted);
+}
+
 .telemetry-bar-container {
     width: 100%;
     border: 1px solid var(--color-border);
@@ -178,7 +260,8 @@ input:focus, select:focus, textarea:focus {
 
 .terminal-progress {
     font-family: var(--font-mono);
-    white-space: pre;
+    white-space: pre-wrap;
+    word-break: break-all;
     font-size: 14px;
     line-height: 1.2;
 }
@@ -190,7 +273,7 @@ input:focus, select:focus, textarea:focus {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--spacing-lg) 0;
+    padding: var(--spacing-lg) var(--spacing-md);
     margin-bottom: var(--spacing-lg);
     overflow-x: auto;
 }
@@ -209,9 +292,16 @@ input:focus, select:focus, textarea:focus {
 }
 
 .pipeline-node:hover {
-    transform: translateY(-2px);
     box-shadow: 4px 4px 0 var(--color-ink);
     background-color: #fdfbf7;
+    --hov-x: 0px;
+    --hov-y: -2px;
+    --hov-rot: 1.5deg;
+    animation: tactileWobble 0.4s ease-out forwards;
+}
+
+.pipeline-node:nth-child(even):hover {
+    animation: tactileWobbleAlt 0.4s ease-out forwards;
 }
 
 .pipeline-node.active-node {
@@ -260,11 +350,13 @@ input:focus, select:focus, textarea:focus {
    ========================================= */
 .accordion-row {
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    border-left: 0px solid transparent;
 }
 
 .accordion-row:hover {
-    background-color: var(--color-bg);
+    background-color: var(--color-highlight);
+    border-left: 4px solid var(--color-ink);
 }
 
 .accordion-content {
@@ -304,4 +396,244 @@ input:focus, select:focus, textarea:focus {
 
 .file-drop-area input[type="file"] {
     display: none;
+}
+
+/* =========================================
+   NEW: COPY ANIMATION
+   ========================================= */
+@keyframes floatToMouse {
+    0% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--tx), var(--ty)) scale(1.2);
+        opacity: 0;
+    }
+}
+
+.copy-anim-float {
+    position: fixed;
+    pointer-events: none;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--color-ink);
+    background: var(--color-highlight);
+    padding: 4px 10px;
+    border: 1px solid var(--color-ink);
+    box-shadow: 2px 2px 0 var(--color-ink);
+    z-index: 9999;
+    animation: floatToMouse 1.5s ease-in-out forwards;
+}
+
+/* =========================================
+   NEW: NEOBRUTALISM SLIDER (REFINED RETRO)
+   ========================================= */
+input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    background: transparent;
+    padding: 10px 0;
+    border: none;
+}
+
+input[type=range]:focus {
+    outline: none;
+    background: transparent;
+    animation: none;
+    box-shadow: none;
+    transform: none;
+}
+
+/* Track */
+input[type=range]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    cursor: pointer;
+    background: var(--color-ink);
+    border: 1px solid var(--color-ink);
+    border-radius: 0px;
+}
+
+/* Thumb */
+input[type=range]::-webkit-slider-thumb {
+    height: 18px;
+    width: 18px;
+    border-radius: 0;
+    background: var(--color-paper);
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -8px;
+    border: 2px solid var(--color-ink);
+    box-shadow: 2px 2px 0px var(--color-ink);
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+input[type=range]::-webkit-slider-thumb:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0px 0px 0px var(--color-ink);
+}
+
+/* Firefox Support */
+input[type=range]::-moz-range-track {
+    width: 100%;
+    height: 4px;
+    cursor: pointer;
+    background: var(--color-ink);
+    border: 1px solid var(--color-ink);
+}
+
+input[type=range]::-moz-range-thumb {
+    height: 18px;
+    width: 18px;
+    border-radius: 0;
+    background: var(--color-paper);
+    cursor: pointer;
+    border: 2px solid var(--color-ink);
+    box-shadow: 2px 2px 0px var(--color-ink);
+}
+
+input[type=range]::-moz-range-thumb:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0px 0px 0px var(--color-ink);
+}
+
+/* =========================================
+   NEW: NEOBRUTALISM FLOATING TOOLTIP
+   ========================================= */
+.tooltip-trigger, [data-tooltip] {
+    position: relative;
+    cursor: help;
+    border-bottom: 2px dotted var(--color-ink);
+}
+
+.neo-floating-tooltip {
+    position: fixed;
+    z-index: 10000;
+    width: max-content;
+    max-width: 250px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: bold;
+    border: 2px solid var(--color-ink);
+    box-shadow: 4px 4px 0px var(--color-ink);
+    white-space: pre-wrap; /* to support newlines from &#10; */
+    text-align: left;
+    line-height: 1.4;
+    pointer-events: none; /* Let mouse pass through */
+    transition: opacity 0.1s ease-out;
+}
+
+
+/* =========================================
+   NEW: INFO BADGE (REFINED RETRO)
+   ========================================= */
+.info-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: bold;
+    cursor: help;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* =========================================
+   NEW: CUSTOM MODAL (REFINED RETRO)
+   ========================================= */
+.neo-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(26, 26, 26, 0.7); /* Dark ink overlay */
+    z-index: 99999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(2px);
+}
+
+.neo-modal {
+    background-color: var(--color-paper);
+    border: 3px solid var(--color-ink);
+    box-shadow: 8px 8px 0px var(--color-ink); /* Deep hard shadow */
+    width: 90%;
+    max-width: 450px;
+    display: flex;
+    flex-direction: column;
+    animation: modalPop 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.neo-modal-header {
+    background-color: var(--color-ink);
+    color: var(--color-paper);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-family: var(--font-heading);
+    font-weight: bold;
+    font-size: 1rem;
+    letter-spacing: 0.5px;
+}
+
+.neo-modal-body {
+    padding: var(--spacing-lg) var(--spacing-md);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    color: var(--color-ink);
+    line-height: 1.5;
+    border-bottom: 2px dashed var(--color-border);
+}
+
+.neo-modal-footer {
+    padding: var(--spacing-sm) var(--spacing-md);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    background-color: var(--color-bg);
+}
+
+@keyframes modalPop {
+    0% { transform: scale(0.9) translateY(20px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* =========================================
+   NEW: TACTILE ANIMATIONS
+   ========================================= */
+@keyframes tactileWobble {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    25% { transform: translate(var(--hov-x, -2px), var(--hov-y, -2px)) rotate(calc(var(--hov-rot, 2deg) * -1)); }
+    50% { transform: translate(var(--hov-x, -2px), var(--hov-y, -2px)) rotate(calc(var(--hov-rot, 2deg) * 0.6)); }
+    75% { transform: translate(var(--hov-x, -2px), var(--hov-y, -2px)) rotate(calc(var(--hov-rot, 2deg) * -0.3)); }
+    100% { transform: translate(var(--hov-x, -2px), var(--hov-y, -2px)) rotate(0deg); }
+}
+
+@keyframes tactileWobbleAlt {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    25% { transform: translate(var(--hov-x, -2px), var(--hov-y, -2px)) rotate(var(--hov-rot, 2deg)); }
+    50% { transform: translate(var(--hov-x, -2px), var(--hov-y, -2px)) rotate(calc(var(--hov-rot, 2deg) * -0.6)); }
+    75% { transform: translate(var(--hov-x, -2px), var(--hov-y, -2px)) rotate(calc(var(--hov-rot, 2deg) * 0.3)); }
+    100% { transform: translate(var(--hov-x, -2px), var(--hov-y, -2px)) rotate(0deg); }
+}
+
+@keyframes accordionWiggle {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(6px); }
+    50% { transform: translateX(3px); }
+    75% { transform: translateX(5px); }
+    100% { transform: translateX(4px); }
 }

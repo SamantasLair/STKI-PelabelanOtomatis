@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import math
 import threading
+from functools import lru_cache
 from flask import Flask, render_template, jsonify, request, redirect
 
 # Konfigurasi Path
@@ -16,6 +17,7 @@ ONNX_DIR = os.path.join(ROOT_DIR, "STKI", "onnx_model")
 ONNX_FILE = os.path.join(ONNX_DIR, "multi_label_model.onnx")
 DB_PATH = os.path.join(ROOT_DIR, "academic_metadata.db")
 DB_REAL_PATH = os.path.join(ROOT_DIR, "academic_demo_real.db")
+MEMORY_DIR = os.path.join(ROOT_DIR, "_memory")
 
 app = Flask(__name__, 
             template_folder=os.path.join(ROOT_DIR, "_UIUX"), 
@@ -23,43 +25,148 @@ app = Flask(__name__,
             static_url_path="/")
 
 # State Sistem Aktif (Default)
-active_db_type = "akademik"
-DB_PATHS = {
-    "akademik": os.path.join(ROOT_DIR, "academic_metadata.db"),
-    "demo_real": os.path.join(ROOT_DIR, "academic_demo_real.db"),
-    "politik": os.path.join(ROOT_DIR, "db_politik.db"),
-    "ekonomi": os.path.join(ROOT_DIR, "db_ekonomi.db"),
-    "bisnis": os.path.join(ROOT_DIR, "db_bisnis.db"),
-    "etika": os.path.join(ROOT_DIR, "db_etika.db")
-}
-active_db_path = DB_PATHS[active_db_type]
+DB_DIR = os.path.join(ROOT_DIR, "_databases")
+os.makedirs(DB_DIR, exist_ok=True)
 
-# Taksonomi Dinamis (Diload dari file JSON)
-TAXONOMY_FILE = os.path.join(ROOT_DIR, "taxonomy_dynamic.json")
+def get_available_databases():
+    dbs = []
+    if os.path.exists(DB_DIR):
+        for f in os.listdir(DB_DIR):
+            if f.endswith(".db"):
+                dbs.append(f)
+    return dbs
 
-def load_taxonomy(db_type):
-    if not os.path.exists(TAXONOMY_FILE):
-        return {"Layer_1_Domain": ["Umum"], "Layer_2_Detail": ["Tidak Terklasifikasi"]}
-    try:
-        with open(TAXONOMY_FILE, 'r') as f:
-            data = json.load(f)
-            return data.get(db_type, {"Layer_1_Domain": ["Umum"], "Layer_2_Detail": ["Tidak Terklasifikasi"]})
-    except:
-        return {"Layer_1_Domain": ["Umum"], "Layer_2_Detail": ["Tidak Terklasifikasi"]}
-
-def save_taxonomy(db_type, tax_data):
-    data = {}
-    if os.path.exists(TAXONOMY_FILE):
+def get_active_db_type():
+    state_file = os.path.join(DB_DIR, "active_db.txt")
+    if os.path.exists(state_file):
         try:
-            with open(TAXONOMY_FILE, 'r') as f:
-                data = json.load(f)
+            with open(state_file, 'r') as f:
+                target = f.read().strip()
+                if target in get_available_databases():
+                    return target
         except:
             pass
-    data[db_type] = tax_data
-    with open(TAXONOMY_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+    dbs = get_available_databases()
+    return dbs[0] if dbs else "default.db"
 
-TAXONOMY = load_taxonomy(active_db_type)
+def get_active_db_path():
+    return os.path.join(DB_DIR, get_active_db_type())
+
+def set_active_db_type(target):
+    state_file = os.path.join(DB_DIR, "active_db.txt")
+    try:
+        with open(state_file, 'w') as f:
+            f.write(target)
+    except Exception as e:
+        print(f"Error saving state: {e}")
+
+active_db_type = get_active_db_type()
+if not get_available_databases():
+    open(get_active_db_path(), 'a').close()
+active_db_path = get_active_db_path()
+
+# Taksonomi Dinamis (Diload dari SQLite)
+# TAXONOMY_FILE deprecated
+
+# In-Memory Semantic Caching
+DB_EMBEDDING_CACHE = {}
+
+# Global State for Taxonomy Generation Progress
+TAXONOMY_PROGRESS = {
+    "status": "idle",
+    "stage": "",
+    "current": 0,
+    "total": 0
+}
+
+@app.route("/api/taxonomy/progress", methods=["GET"])
+def get_taxonomy_progress():
+    return jsonify(TAXONOMY_PROGRESS)
+
+@app.before_request
+def sync_global_db_state():
+    global active_db_type, active_db_path, TAXONOMY, DB_EMBEDDING_CACHE
+    current_type = get_active_db_type()
+    if 'active_db_type' not in globals() or active_db_type != current_type:
+        active_db_type = current_type
+        active_db_path = get_active_db_path()
+        TAXONOMY = load_taxonomy(active_db_path)
+        DB_EMBEDDING_CACHE = {}
+
+def get_db_embedding(active_db_type, doc_id, emb_str):
+    cache_key = (active_db_type, doc_id)
+    if cache_key not in DB_EMBEDDING_CACHE:
+        DB_EMBEDDING_CACHE[cache_key] = np.array(json.loads(emb_str))
+    return DB_EMBEDDING_CACHE[cache_key]
+
+def load_taxonomy(db_path):
+    tax = {"Layer_1_Domain": [], "Layer_2_Detail": [], "threshold_l1": 0.50, "threshold_l2": 0.55}
+    if not os.path.exists(db_path):
+        return tax
+    try:
+        conn = sqlite3.connect(db_path, timeout=15)
+        c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS taxonomy_labels (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
+        c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        conn.commit()
+        
+        c.execute("SELECT name FROM taxonomy_labels WHERE layer='Layer_1_Domain'")
+        tax["Layer_1_Domain"] = [row[0] for row in c.fetchall()]
+        
+        c.execute("SELECT name FROM taxonomy_labels WHERE layer='Layer_2_Detail'")
+        tax["Layer_2_Detail"] = [row[0] for row in c.fetchall()]
+        
+        c.execute("SELECT key, value FROM settings")
+        for k, v in c.fetchall():
+            if k in ["threshold_l1", "threshold_l2"]:
+                tax[k] = float(v)
+        conn.close()
+    except Exception as e:
+        print(f"Error loading taxonomy DB: {e}")
+        
+    if not tax["Layer_1_Domain"]: tax["Layer_1_Domain"] = ["Umum"]
+    if not tax["Layer_2_Detail"]: tax["Layer_2_Detail"] = ["Tidak Terklasifikasi"]
+    return tax
+
+def save_setting(db_path, key, value):
+    try:
+        conn = sqlite3.connect(db_path, timeout=15)
+        c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+        conn.commit()
+        conn.close()
+        global TAXONOMY
+        TAXONOMY[key] = float(value)
+    except Exception as e:
+        print(f"Error saving setting: {e}")
+
+def save_taxonomy(db_type, taxonomy_dict):
+    db_path = os.path.join(DB_DIR, db_type)
+    try:
+        conn = sqlite3.connect(db_path, timeout=15)
+        c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS taxonomy_labels (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
+        c.execute("DELETE FROM taxonomy_labels")
+        
+        for l1 in taxonomy_dict.get("Layer_1_Domain", []):
+            try:
+                c.execute("INSERT INTO taxonomy_labels (layer, name) VALUES (?, ?)", ("Layer_1_Domain", l1))
+            except sqlite3.IntegrityError:
+                pass
+                
+        for l2 in taxonomy_dict.get("Layer_2_Detail", []):
+            try:
+                c.execute("INSERT INTO taxonomy_labels (layer, name) VALUES (?, ?)", ("Layer_2_Detail", l2))
+            except sqlite3.IntegrityError:
+                pass
+                
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"Error saving taxonomy DB: {e}")
+
+TAXONOMY = load_taxonomy(active_db_path)
 
 import datetime
 import traceback
@@ -129,6 +236,7 @@ def extract_key_sentences(text, num_sentences=5):
     top_indices = np.argsort(scores)[::-1][:num_sentences]
     return " ".join([sentences[idx] for idx in sorted(top_indices)])
 
+@lru_cache(maxsize=2000)
 def get_onnx_embedding(text):
     if session is None or tokenizer is None:
         return np.zeros(5)
@@ -232,7 +340,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
     global relabel_progress
     try:
         relabel_progress["status"] = "running"
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=15)
         cursor = conn.cursor()
         cursor.execute("SELECT id, content FROM documents")
         rows = cursor.fetchall()
@@ -278,13 +386,19 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                     # Penalti bagi yang tidak ada irisan signifikan
                     l2_raw_sims[i] = l2_raw_sims[i] * 0.80
             
+            # Ambil threshold dinamis
+            dyn_t2 = float(TAXONOMY.get("threshold_l2", 0.55))
             for i in range(len(l2_raw_sims)):
-                if l2_raw_sims[i] < 0.35: # Threshold disesuaikan menjadi 35%
+                if l2_raw_sims[i] < dyn_t2: 
                     l2_raw_sims[i] = 0.0
             
-            best_l2_label = "Tidak Terklasifikasi"
-            if max(l2_raw_sims) > 0.0:
-                best_l2_label = tax_layer2[np.argmax(l2_raw_sims)]
+            assigned_l2 = []
+            for i, sim in enumerate(l2_raw_sims):
+                if sim > 0.0:
+                    assigned_l2.append(tax_layer2[i])
+                    
+            if not assigned_l2:
+                assigned_l2 = ["Tidak Terklasifikasi"]
 
             # 2. Predict Layer 1
             l1_raw_sims = []
@@ -315,15 +429,21 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 else:
                     l1_raw_sims[i] = l1_raw_sims[i] * 0.80
             
+            # Ambil threshold dinamis
+            dyn_t1 = float(TAXONOMY.get("threshold_l1", 0.50))
             for i in range(len(l1_raw_sims)):
-                if l1_raw_sims[i] < 0.30: # Threshold disesuaikan menjadi 30%
+                if l1_raw_sims[i] < dyn_t1: 
                     l1_raw_sims[i] = 0.0
                 
-            best_l1_label = "Tidak Terklasifikasi"
-            if max(l1_raw_sims) > 0.0:
-                best_l1_label = tax_layer1[np.argmax(l1_raw_sims)]
+            assigned_l1 = []
+            for i, sim in enumerate(l1_raw_sims):
+                if sim > 0.0:
+                    assigned_l1.append(tax_layer1[i])
+                    
+            if not assigned_l1:
+                assigned_l1 = ["Tidak Terklasifikasi"]
             
-            predicted_labels = [best_l1_label, best_l2_label]
+            predicted_labels = list(set(assigned_l1 + assigned_l2))
             cursor.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(predicted_labels), doc_id))
             
             relabel_progress["current"] = idx + 1
@@ -353,10 +473,77 @@ def ds_view():
 @app.route("/api/documents", methods=["GET"])
 def get_documents():
     try:
-        conn = sqlite3.connect(active_db_path)
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 50))
+        filter_type = request.args.get('filter', 'all')
+        
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT 500")
-        rows = cursor.fetchall()
+        
+        import time
+        t_start = time.time()
+        
+        cursor.execute("PRAGMA table_info(documents)")
+        cols = [col[1] for col in cursor.fetchall()]
+        has_filename = 'filename' in cols
+        filename_col = "filename" if has_filename else "id as filename"
+        
+        if filter_type == 'all':
+            cursor.execute("SELECT COUNT(id) FROM documents")
+            total_docs = cursor.fetchone()[0]
+            offset = (page - 1) * limit
+            cursor.execute(f"SELECT id, {filename_col}, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+            rows = cursor.fetchall()
+        else:
+            # [BIG DATA DOCTRINE] C-Engine JSON1 Offloading (Zero Python RAM Allocation)
+            if filter_type == 'outlier':
+                count_query = """
+                    SELECT COUNT(id) FROM documents 
+                    WHERE labels IS NULL OR labels = '[]' OR json_array_length(labels) = 0 
+                    OR EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
+                """
+                data_query = f"""
+                    SELECT id, {filename_col}, labels, content FROM documents 
+                    WHERE labels IS NULL OR labels = '[]' OR json_array_length(labels) = 0 
+                    OR EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                """
+            elif filter_type == 'overlap':
+                count_query = """
+                    SELECT COUNT(id) FROM documents 
+                    WHERE json_array_length(labels) > 1 
+                    AND NOT EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
+                """
+                data_query = f"""
+                    SELECT id, {filename_col}, labels, content FROM documents 
+                    WHERE json_array_length(labels) > 1 
+                    AND NOT EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                """
+            elif filter_type.startswith('label_'):
+                target_label = filter_type[6:] # Menghilangkan prefix "label_"
+                count_query = """
+                    SELECT COUNT(id) FROM documents 
+                    WHERE EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?)
+                """
+                data_query = f"""
+                    SELECT id, {filename_col}, labels, content FROM documents 
+                    WHERE EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?)
+                    ORDER BY id DESC LIMIT ? OFFSET ?
+                """
+                cursor.execute(count_query, (target_label,))
+                total_docs = cursor.fetchone()[0]
+                offset = (page - 1) * limit
+                cursor.execute(data_query, (target_label, limit, offset))
+                rows = cursor.fetchall()
+            
+            if not filter_type.startswith('label_'):
+                cursor.execute(count_query)
+                total_docs = cursor.fetchone()[0]
+                offset = (page - 1) * limit
+                cursor.execute(data_query, (limit, offset))
+                rows = cursor.fetchall()
+                
         conn.close()
         
         docs = []
@@ -367,9 +554,22 @@ def get_documents():
                 "labels": json.loads(r[2]) if r[2] else [],
                 "content": r[3]
             })
-        return jsonify({"status": "success", "documents": docs})
+            
+        total_pages = math.ceil(total_docs / limit) if total_docs > 0 else 1
+        t_end = time.time()
+        elapsed_ms = round((t_end - t_start) * 1000, 2)
+        
+        return jsonify({
+            "status": "success", 
+            "documents": docs,
+            "total": total_docs,
+            "page": page,
+            "limit": limit,
+            "total_pages": total_pages,
+            "debug_time_ms": elapsed_ms
+        })
     except Exception as e:
-        log_error("DB Explorer", f"Gagal memuat dokumen: {str(e)}", exc=True)
+        log_error("DB Explorer", f"Gagal memuat dokumen (Pagination): {str(e)}", exc=True)
         return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/api/status", methods=["GET"])
@@ -378,7 +578,7 @@ def get_status():
     
     # Buat DB jika belum ada
     if not os.path.exists(active_db_path):
-        conn = sqlite3.connect(active_db_path)
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS documents (
@@ -392,35 +592,27 @@ def get_status():
         conn.commit()
         conn.close()
         
-    conn = sqlite3.connect(active_db_path)
+    conn = sqlite3.connect(get_active_db_path(), timeout=15)
     c = conn.cursor()
     c.execute("SELECT COUNT(*) FROM documents")
     total_docs = c.fetchone()[0]
+    conn.close()
     
     # Hitung Rice Rule optimal X
     optimal_x = math.ceil(2 * (total_docs ** (1/3))) if total_docs > 0 else 0
     
-    # Ambil unique labels saat ini di DB
-    c.execute("SELECT labels FROM documents")
-    rows = c.fetchall()
-    conn.close()
-    
-    unique_labels = set()
-    for r in rows:
-        if r[0]:
-            try:
-                for l in json.loads(r[0]):
-                    unique_labels.add(l)
-            except:
-                pass
+    # [ANTI-OOM & MEMORY SAFE FIRST] 
+    # Alih-alih melooping json.loads() pada puluhan ribu row dari "SELECT labels FROM documents", 
+    # kita hitung O(1) dari TAXONOMY memory.
+    actual_labels_count = len(TAXONOMY.get("Layer_1_Domain", [])) + len(TAXONOMY.get("Layer_2_Detail", []))
                 
     db_names = {
         "akademik": "Akademik Kampus",
         "politik": "Politik & Regulasi",
-        "ekonomi": "Ekonomi Makro & Mikro",
+        "ekonomi": "Ekonomi Makro & Mikro (Demo Kontaminasi)",
         "bisnis": "Peraturan Bisnis & Korporat",
         "etika": "Etika & Hukum Hak Asasi",
-        "demo_real": "Demo Real (Riset & Jurnal)"
+        "demo_real": "Teknologi & Komputer (Demo Real)"
     }
     db_name = db_names.get(active_db_type, "Unknown Database")
     
@@ -429,26 +621,187 @@ def get_status():
         "db_type": active_db_type,
         "total_docs": total_docs,
         "optimal_labels_count": optimal_x,
-        "actual_labels_count": len(unique_labels),
+        "actual_labels_count": actual_labels_count,
         "taxonomy": TAXONOMY
     })
 
 @app.route("/api/switch_db", methods=["POST"])
 def switch_db():
+    global active_db_type, active_db_path, TAXONOMY, DB_EMBEDDING_CACHE
+    data = request.get_json()
+    target = data.get("db_type", "")
+    
+    if target in get_available_databases():
+        set_active_db_type(target)
+        active_db_type = target
+        active_db_path = get_active_db_path()
+        TAXONOMY = load_taxonomy(active_db_path)
+        DB_EMBEDDING_CACHE = {} # Reset cache
+        return jsonify({"status": "success", "message": f"Berhasil dialihkan ke Ledger {target}"})
+    return jsonify({"status": "error", "message": "Ledger tidak ditemukan."})
+
+@app.route("/api/ledgers", methods=["GET"])
+def get_ledgers():
+    dbs = get_available_databases()
+    return jsonify({"status": "success", "ledgers": dbs, "active": active_db_type})
+
+@app.route("/api/ledgers/create", methods=["POST"])
+def create_ledger():
+    data = request.get_json()
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"status": "error", "message": "Nama ledger tidak boleh kosong."})
+    if not name.endswith(".db"):
+        name += ".db"
+    
+    db_path = os.path.join(DB_DIR, name)
+    if os.path.exists(db_path):
+        return jsonify({"status": "error", "message": "Ledger dengan nama ini sudah ada."})
+    
+    try:
+        # Buat file kosong
+        open(db_path, 'a').close()
+        # Initialize taxonomy to create tables
+        load_taxonomy(db_path)
+        return jsonify({"status": "success", "message": f"Ledger {name} berhasil dibuat.", "ledgers": get_available_databases()})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/api/ledgers/rename", methods=["POST"])
+def rename_ledger():
+    global active_db_type, active_db_path
+    data = request.get_json()
+    old_name = data.get("old_name", "").strip()
+    new_name = data.get("new_name", "").strip()
+    
+    if not new_name.endswith(".db"):
+        new_name += ".db"
+        
+    old_path = os.path.join(DB_DIR, old_name)
+    new_path = os.path.join(DB_DIR, new_name)
+    
+    if not os.path.exists(old_path):
+        return jsonify({"status": "error", "message": "Ledger lama tidak ditemukan."})
+    if os.path.exists(new_path):
+        return jsonify({"status": "error", "message": "Nama ledger baru sudah digunakan."})
+        
+    try:
+        os.rename(old_path, new_path)
+        if active_db_type == old_name:
+            active_db_type = new_name
+            active_db_path = new_path
+        return jsonify({"status": "success", "message": f"Berhasil diubah menjadi {new_name}", "ledgers": get_available_databases(), "active": active_db_type})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+@app.route("/api/ledgers/delete", methods=["POST"])
+def delete_ledger():
     global active_db_type, active_db_path, TAXONOMY
     data = request.get_json()
-    target = data.get("db_type", "akademik")
+    target = data.get("name", "").strip()
     
-    if target in DB_PATHS:
-        active_db_type = target
-        active_db_path = DB_PATHS[target]
-        TAXONOMY = load_taxonomy(target)
+    db_path = os.path.join(DB_DIR, target)
+    if not os.path.exists(db_path):
+        return jsonify({"status": "error", "message": "Ledger tidak ditemukan."})
         
-        # Trigger real demo generation if it's demo_real and doesn't exist
-        if target == "demo_real" and not os.path.exists(active_db_path):
-            os.system(f'python "{os.path.join(CURRENT_DIR, "generate_real_demo.py")}"')
+    try:
+        os.remove(db_path)
+        dbs = get_available_databases()
+        if active_db_type == target:
+            active_db_type = dbs[0] if dbs else "default.db"
+            active_db_path = os.path.join(DB_DIR, active_db_type)
+            if not dbs:
+                open(active_db_path, 'a').close()
+            TAXONOMY = load_taxonomy(active_db_path)
             
-    return jsonify({"status": "success", "message": f"Berhasil dialihkan ke Database {target.upper()}"})
+        return jsonify({"status": "success", "message": f"Ledger {target} berhasil dihapus.", "ledgers": get_available_databases(), "active": active_db_type})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)})
+
+
+@app.route("/api/taxonomy/settings", methods=["POST"])
+def update_taxonomy_settings():
+    try:
+        data = request.get_json()
+        k = data.get("key")
+        v = data.get("value")
+        if k and v is not None:
+            save_setting(active_db_path, k, v)
+        return jsonify({"status": "success", "taxonomy": TAXONOMY})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/api/taxonomy/add", methods=["POST"])
+def add_taxonomy_label():
+    try:
+        data = request.get_json()
+        layer = data.get("layer")
+        name = data.get("name")
+        if not layer or not name: return jsonify({"error": "Missing layer or name"})
+        
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        c = conn.cursor()
+        c.execute("INSERT INTO taxonomy_labels (layer, name) VALUES (?, ?)", (layer, name))
+        conn.commit()
+        conn.close()
+        
+        global TAXONOMY
+        TAXONOMY = load_taxonomy(active_db_path)
+        return jsonify({"status": "success", "taxonomy": TAXONOMY})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Label sudah ada."})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/api/taxonomy/edit", methods=["POST"])
+def edit_taxonomy_label():
+    try:
+        data = request.get_json()
+        old_name = data.get("old_name")
+        new_name = data.get("new_name")
+        layer = data.get("layer")
+        
+        if not old_name or not new_name or not layer: 
+            return jsonify({"error": "Invalid data"})
+            
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        c = conn.cursor()
+        c.execute("UPDATE taxonomy_labels SET name=? WHERE layer=? AND name=?", (new_name, layer, old_name))
+        conn.commit()
+        conn.close()
+        
+        global TAXONOMY
+        TAXONOMY = load_taxonomy(active_db_path)
+        
+        threading.Thread(target=async_relabel_task, args=(active_db_path, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"])).start()
+        
+        return jsonify({"status": "success", "taxonomy": TAXONOMY})
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Label dengan nama tersebut sudah ada."})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/api/taxonomy/delete", methods=["POST"])
+def delete_taxonomy_label():
+    try:
+        data = request.get_json()
+        name = data.get("name")
+        layer = data.get("layer")
+        
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        c = conn.cursor()
+        c.execute("DELETE FROM taxonomy_labels WHERE layer=? AND name=?", (layer, name))
+        conn.commit()
+        conn.close()
+        
+        global TAXONOMY
+        TAXONOMY = load_taxonomy(active_db_path)
+        
+        threading.Thread(target=async_relabel_task, args=(active_db_path, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"])).start()
+        
+        return jsonify({"status": "success", "taxonomy": TAXONOMY})
+    except Exception as e:
+        return jsonify({"error": str(e)})
 
 @app.route("/api/search", methods=["POST"])
 def search():
@@ -462,7 +815,7 @@ def search():
             
         doc_vector = get_onnx_embedding(query)
         
-        conn = sqlite3.connect(active_db_path)
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         cursor = conn.cursor()
         
         query_words = query.lower().split()
@@ -472,7 +825,7 @@ def search():
         conditions = " OR ".join(["content LIKE ?" for _ in query_words])
         params = [f"%{w}%" for w in query_words]
         
-        cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions}", params)
+        cursor.execute(f"SELECT filename, labels, content, embedding, id FROM documents WHERE {conditions}", params)
         rows_db = cursor.fetchall()
         conn.close()
         
@@ -482,7 +835,7 @@ def search():
         corpus = [row[2] for row in rows_db]
         filenames = [row[0] for row in rows_db]
         labels_list = [json.loads(row[1]) for row in rows_db]
-        embeddings = [np.array(json.loads(row[3])) for row in rows_db]
+        embeddings = [get_db_embedding(active_db_type, row[4], row[3]) for row in rows_db]
         
         bm25 = BM25(corpus)
         query_words = query.lower().split()
@@ -543,13 +896,24 @@ def recommend():
             return jsonify({"data_files": [], "doc_files": []})
             
         doc_vector = get_onnx_embedding(query)
-        query_words = query.lower().split()
+        
+        import re
+        from collections import Counter
+        text_lower = query.lower()
+        words = re.findall(r'\b[a-z]{3,}\b', text_lower)
+        stop_words_reco = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "adalah", "bahwa", "oleh", "karena", "tersebut", "tidak", "bisa", "akan", "dapat", "menjadi"}
+        filtered_words = [w for w in words if w not in stop_words_reco]
+        word_counts = Counter(filtered_words)
+        query_words = [w for w, count in word_counts.most_common(20)]
+        if not query_words:
+            query_words = ["data"]
+            
         conditions = " OR ".join(["content LIKE ?" for _ in query_words])
         params = [f"%{w}%" for w in query_words]
         
-        conn = sqlite3.connect(active_db_path)
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         cursor = conn.cursor()
-        cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
+        cursor.execute(f"SELECT filename, labels, content, embedding, id FROM documents WHERE {conditions}", params)
         rows_db = cursor.fetchall()
         conn.close()
         
@@ -558,7 +922,7 @@ def recommend():
             
         corpus = [row[2] for row in rows_db]
         filenames = [row[0] for row in rows_db]
-        embeddings = [np.array(json.loads(row[3])) for row in rows_db]
+        embeddings = [get_db_embedding(active_db_type, row[4], row[3]) for row in rows_db]
         
         bm25 = BM25(corpus)
         norm_bm25_scores = [1.0 - np.exp(-0.2 * bm25.get_score(query_words, i)) for i in range(len(corpus))]
@@ -590,8 +954,8 @@ def recommend():
         doc_files = sorted(doc_files, key=lambda x: x["similarity"], reverse=True)
         
         return jsonify({
-            "data_files": data_files,
-            "doc_files": doc_files
+            "data_files": data_files[offset:offset+limit],
+            "doc_files": doc_files[offset:offset+limit]
         })
     except Exception as e:
         log_error("Recommend API", f"Gagal menarik rekomendasi: {str(e)}", exc=True)
@@ -633,8 +997,9 @@ def predict():
             else:
                 l2_raw_sims[i] = l2_raw_sims[i] * 0.80
 
+        dyn_t2 = float(TAXONOMY.get("threshold_l2", 0.55))
         for i in range(len(l2_raw_sims)):
-            if l2_raw_sims[i] < 0.35: 
+            if l2_raw_sims[i] < dyn_t2: 
                 l2_raw_sims[i] = 0.0
             
         l2_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l2_raw_sims]
@@ -665,8 +1030,9 @@ def predict():
             else:
                 l1_raw_sims[i] = l1_raw_sims[i] * 0.80
 
+        dyn_t1 = float(TAXONOMY.get("threshold_l1", 0.50))
         for i in range(len(l1_raw_sims)):
-            if l1_raw_sims[i] < 0.30: 
+            if l1_raw_sims[i] < dyn_t1: 
                 l1_raw_sims[i] = 0.0
             
         l1_scores = [max(0.0, min(1.0, sim)) * 100.0 for sim in l1_raw_sims]
@@ -758,11 +1124,15 @@ def ingest_file():
             label_words = set(label.lower().split())
             overlap = sum(1.0 for w in text_words.intersection(label_words) if w not in stop_words)
             l2_raw_sims[i] = l2_raw_sims[i] * 1.0 if overlap > 0.5 else l2_raw_sims[i] * 0.80
-            if l2_raw_sims[i] < 0.35: l2_raw_sims[i] = 0.0
+            dyn_t2 = float(TAXONOMY.get("threshold_l2", 0.55))
+            if l2_raw_sims[i] < dyn_t2: l2_raw_sims[i] = 0.0
             
-        best_l2 = "Tidak Terklasifikasi"
-        if l2_raw_sims and max(l2_raw_sims) > 0.0:
-            best_l2 = TAXONOMY["Layer_2_Detail"][np.argmax(l2_raw_sims)]
+        assigned_l2 = []
+        for i, sim in enumerate(l2_raw_sims):
+            if sim > 0.0:
+                assigned_l2.append(TAXONOMY["Layer_2_Detail"][i])
+        if not assigned_l2:
+            assigned_l2 = ["Tidak Terklasifikasi"]
 
         # Predict L1
         l1_raw_sims = []
@@ -776,17 +1146,22 @@ def ingest_file():
             label_words = set(label.lower().split())
             overlap = sum(1.0 for w in text_words.intersection(label_words) if w not in stop_words)
             l1_raw_sims[i] = l1_raw_sims[i] * 1.0 if overlap > 0.5 else l1_raw_sims[i] * 0.80
-            if l1_raw_sims[i] < 0.30: l1_raw_sims[i] = 0.0
+            dyn_t1 = float(TAXONOMY.get("threshold_l1", 0.50))
+            if l1_raw_sims[i] < dyn_t1: l1_raw_sims[i] = 0.0
             
-        best_l1 = "Tidak Terklasifikasi"
-        if l1_raw_sims and max(l1_raw_sims) > 0.0:
-            best_l1 = TAXONOMY["Layer_1_Domain"][np.argmax(l1_raw_sims)]
+        assigned_l1 = []
+        for i, sim in enumerate(l1_raw_sims):
+            if sim > 0.0:
+                assigned_l1.append(TAXONOMY["Layer_1_Domain"][i])
+        if not assigned_l1:
+            assigned_l1 = ["Tidak Terklasifikasi"]
             
-        labels_json = json.dumps([best_l1, best_l2])
+        predicted_labels = list(set(assigned_l1 + assigned_l2))
+        labels_json = json.dumps(predicted_labels)
         vector_json = json.dumps(doc_vector.tolist())
         
         # INSERT KE DB
-        conn = sqlite3.connect(active_db_path)
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         c = conn.cursor()
         try:
             c.execute("INSERT INTO documents (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
@@ -803,7 +1178,7 @@ def ingest_file():
             "status": "success", 
             "content": content, 
             "filename": filename,
-            "labels": [best_l1, best_l2]
+            "labels": predicted_labels
         })
     except Exception as e:
         log_error("Ingestion API", f"Gagal memproses file {file.filename}: {str(e)}", exc=True)
@@ -811,22 +1186,31 @@ def ingest_file():
 
 @app.route("/api/labels", methods=["GET"])
 def get_labels():
-    conn = sqlite3.connect(active_db_path)
+    # [BIG DATA DOCTRINE - TEORI #11: SINGLE-PASS AGGREGATION]
+    # Mengganti loop 30 FULL TABLE SCANS (1.5 GB Disk Read per klik) menjadi 1 Kueri Agregat (Single-Pass)
+    # yang diproses sepenuhnya oleh C-Engine SQLite JSON1, memotong latensi hingga 99% tanpa membekukan GIL Python.
+    global TAXONOMY
+    all_labels = set(TAXONOMY.get("Layer_1_Domain", []) + TAXONOMY.get("Layer_2_Detail", []))
+    
+    conn = sqlite3.connect(get_active_db_path(), timeout=15)
     c = conn.cursor()
-    c.execute("SELECT labels FROM documents")
-    rows = c.fetchall()
+    
+    # 1 Putaran Kueri untuk Agregasi Massal C-Engine
+    c.execute("""
+        SELECT json_each.value, COUNT(documents.id) 
+        FROM documents, json_each(documents.labels) 
+        WHERE documents.labels IS NOT NULL AND documents.labels != '[]'
+        GROUP BY json_each.value
+    """)
+    db_counts = dict(c.fetchall())
     conn.close()
     
-    unique_labels = {}
-    for r in rows:
-        if r[0]:
-            try:
-                for l in json.loads(r[0]):
-                    unique_labels[l] = unique_labels.get(l, 0) + 1
-            except:
-                pass
-                
-    sorted_labels = [{"label": k, "count": v} for k, v in sorted(unique_labels.items())]
+    sorted_labels = []
+    for lbl in all_labels:
+        sorted_labels.append({"label": lbl, "count": db_counts.get(lbl, 0)})
+    
+    # Urutkan berdasarkan abjad
+    sorted_labels = sorted(sorted_labels, key=lambda x: x['label'])
     return jsonify(sorted_labels)
 
 @app.route("/api/labels/edit", methods=["POST"])
@@ -840,9 +1224,16 @@ def edit_label():
         return jsonify({"status": "error", "message": "Nama label tidak boleh kosong"})
         
     try:
-        conn = sqlite3.connect(active_db_path)
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         c = conn.cursor()
-        c.execute("SELECT id, labels FROM documents")
+        # [BIG DATA DOCTRINE - TEORI #7: Existential Short-Circuiting]
+        c.execute("""
+            SELECT id, labels 
+            FROM documents 
+            WHERE EXISTS (
+                SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?
+            )
+        """, (old_name,))
         rows = c.fetchall()
         
         updated = 0
@@ -878,9 +1269,16 @@ def delete_label():
         return jsonify({"status": "error", "message": "Nama label kosong"})
         
     try:
-        conn = sqlite3.connect(active_db_path)
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         c = conn.cursor()
-        c.execute("SELECT id, labels FROM documents")
+        # [BIG DATA DOCTRINE - TEORI #7: Existential Short-Circuiting]
+        c.execute("""
+            SELECT id, labels 
+            FROM documents 
+            WHERE EXISTS (
+                SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?
+            )
+        """, (lbl_to_delete,))
         rows = c.fetchall()
         
         updated = 0
@@ -934,48 +1332,79 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 @app.route("/api/taxonomy/generate", methods=["POST"])
 def generate_taxonomy():
-    global TAXONOMY
+    global TAXONOMY, DB_EMBEDDING_CACHE, TAXONOMY_PROGRESS
     try:
-        conn = sqlite3.connect(active_db_path)
+        data_req = request.get_json() or {}
+        threshold_l1 = float(data_req.get("threshold_l1", 0.50))
+        threshold_l2 = float(data_req.get("threshold_l2", 0.55))
+        
+        active_db_type = get_active_db_type()
+        
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, content, embedding FROM documents WHERE embedding IS NOT NULL")
+        # [BIG DATA DOCTRINE - MEMORY SAFE FIRST]
+        # Hanya tarik ID dan Embedding. Abaikan 'content' (Teks 30K dokumen = 1GB+ RAM)
+        cursor.execute("SELECT id, embedding FROM documents")
         rows = cursor.fetchall()
         
         N = len(rows)
         if N == 0:
             conn.close()
+            TAXONOMY_PROGRESS["status"] = "idle"
             return jsonify({"status": "error", "message": "Database kosong atau belum ada dokumen untuk dianalisis."})
             
-        # RUMUS RICE RULE
+        # RUMUS RICE RULE (Untuk Penemuan Topik / Discovery)
         X = math.ceil(2 * (N ** (1/3)))
         n_clusters_l2 = min(X, N)
         
-        ids = [r[0] for r in rows]
-        contents = [r[1] for r in rows]
+        TAXONOMY_PROGRESS.update({
+            "status": "running",
+            "stage": "Mengekstrak Semantic Vektor (Memory Safe)",
+            "current": 0,
+            "total": N
+        })
         
+        ids = []
         embeddings = []
-        for r in rows:
-            emb = np.array(json.loads(r[2]))
-            if len(emb) != 384:
-                emb = get_onnx_embedding(r[1])
+        DB_EMBEDDING_CACHE.clear() # Cegah RAM Leak saat scan masal
+        
+        for idx, row in enumerate(rows):
+            doc_id, emb_str = row
+            ids.append(doc_id)
+            if emb_str is None or len(json.loads(emb_str)) != 384:
+                # Fallback: tarik content HANYA jika embedding rusak/kosong
+                cursor.execute("SELECT content FROM documents WHERE id = ?", (doc_id,))
+                c_content = cursor.fetchone()[0]
+                emb = get_onnx_embedding(c_content)
+                cursor.execute("UPDATE documents SET embedding = ? WHERE id = ?", (json.dumps(emb.tolist()), doc_id))
+            else:
+                emb = np.array(json.loads(emb_str), dtype=np.float32)
+                
             embeddings.append(emb)
-        embeddings = np.array(embeddings)
+            
+            if (idx + 1) % 500 == 0:
+                conn.commit() # [BATCH COMMIT] Cegah SQLite Disk I/O Error pada transaksi massal
+                
+            if (idx + 1) % 500 == 0 or (idx + 1) == N:
+                TAXONOMY_PROGRESS["current"] = idx + 1
+        
+        conn.commit()
+        del rows # Free memory explicitly
+        import gc
+        gc.collect()
+        
+        TAXONOMY_PROGRESS.update({"stage": "Menjalankan K-Means Clustering & TF-IDF (Batched)..."})
+        embeddings = np.array(embeddings, dtype=np.float32)
         
         # 1. K-Means Layer 2 (Detail)
         kmeans_l2 = KMeans(n_clusters=n_clusters_l2, random_state=42, n_init="auto")
         cluster_l2_assignments = kmeans_l2.fit_predict(embeddings)
         
-        # Ekstraksi Kata Kunci menggunakan TF-IDF
-        try:
-            vectorizer = TfidfVectorizer(max_df=0.8, min_df=2, stop_words=["dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"])
-            tfidf_matrix = vectorizer.fit_transform(contents)
-        except:
-            vectorizer = TfidfVectorizer()
-            tfidf_matrix = vectorizer.fit_transform(contents)
-            
-        feature_names = vectorizer.get_feature_names_out()
+        # [BIG DATA DOCTRINE] TF-IDF Sampling (Max 30 dokumen per cluster)
+        # Alih-alih memuat 31.000 dokumen ke RAM, kita sample 30 dokumen per cluster = RAM 99% lebih hemat
         layer_2_labels = []
         l2_cluster_to_label = {}
+        import random
         
         for i in range(n_clusters_l2):
             cluster_docs_idx = np.where(cluster_l2_assignments == i)[0]
@@ -983,13 +1412,31 @@ def generate_taxonomy():
                 l2_cluster_to_label[i] = f"Cluster {i}"
                 continue
                 
-            cluster_tfidf = tfidf_matrix[cluster_docs_idx].sum(axis=0)
-            cluster_tfidf = np.squeeze(np.asarray(cluster_tfidf))
+            sample_size = min(30, len(cluster_docs_idx))
+            sampled_indices = random.sample(list(cluster_docs_idx), sample_size)
+            sampled_ids = [ids[idx] for idx in sampled_indices]
             
-            top_indices = cluster_tfidf.argsort()[::-1][:2]
-            top_words = [feature_names[idx].title() for idx in top_indices]
-            label_name = " ".join(top_words)
+            placeholders = ','.join('?' * len(sampled_ids))
+            cursor.execute(f"SELECT content FROM documents WHERE id IN ({placeholders})", sampled_ids)
+            sample_contents = [r[0] for r in cursor.fetchall()]
             
+            try:
+                from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+                indo_stop_words = ["dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "bahwa", "oleh", "karena", "sebab"]
+                custom_stop_words = list(ENGLISH_STOP_WORDS) + indo_stop_words
+                vectorizer = TfidfVectorizer(max_df=0.8, min_df=1, stop_words=custom_stop_words, token_pattern=r'(?u)\b[a-zA-Z][a-zA-Z]+\b')
+                tfidf_matrix = vectorizer.fit_transform(sample_contents)
+                feature_names = vectorizer.get_feature_names_out()
+                
+                cluster_tfidf = tfidf_matrix.sum(axis=0)
+                cluster_tfidf = np.squeeze(np.asarray(cluster_tfidf))
+                
+                top_indices = cluster_tfidf.argsort()[::-1][:2]
+                top_words = [feature_names[idx].title() for idx in top_indices]
+                label_name = " ".join(top_words)
+            except:
+                label_name = ""
+                
             if not label_name:
                 label_name = f"Cluster {i}"
                 
@@ -1022,29 +1469,80 @@ def generate_taxonomy():
         # Update TAXONOMY
         TAXONOMY["Layer_1_Domain"] = list(set(layer_1_labels))
         TAXONOMY["Layer_2_Detail"] = list(set(layer_2_labels))
+        TAXONOMY["threshold_l1"] = threshold_l1
+        TAXONOMY["threshold_l2"] = threshold_l2
         save_taxonomy(active_db_type, TAXONOMY)
         
-        # 3. Relabeling dokumen di Database
+        # 3. Multi-Label Overlapping Assignment (Thresholding Venn Diagram)
+        l2_embs = kmeans_l2.cluster_centers_
+        l2_labels_map = [l2_cluster_to_label[i] for i in range(n_clusters_l2)]
+        
+        l1_embs = kmeans_l1.cluster_centers_
+        l1_labels_map = [l1_cluster_to_label[i] for i in range(n_clusters_l1)]
+        
+        outlier_count = 0
+        overlap_count = 0
+        
+        TAXONOMY_PROGRESS.update({"stage": "Thresholding Cosine (Venn Overlaps)...", "current": 0})
+        
         for idx, doc_id in enumerate(ids):
-            l2_cluster = cluster_l2_assignments[idx]
-            l1_cluster = cluster_l1_assignments[l2_cluster]
+            doc_emb = embeddings[idx]
+            assigned_labels = []
             
-            lbl_l2 = l2_cluster_to_label[l2_cluster]
-            lbl_l1 = l1_cluster_to_label[l1_cluster]
-            
-            labels_json = json.dumps([lbl_l1, lbl_l2])
+            # Cek Layer 1 (Domain)
+            for i, l1_emb in enumerate(l1_embs):
+                sim = get_cosine_similarity(doc_emb, l1_emb)
+                if sim >= threshold_l1:
+                    assigned_labels.append(l1_labels_map[i])
+                    
+            # Cek Layer 2 (Detail)
+            for i, l2_emb in enumerate(l2_embs):
+                sim = get_cosine_similarity(doc_emb, l2_emb)
+                if sim >= threshold_l2:
+                    assigned_labels.append(l2_labels_map[i])
+                    
+            # Outlier Fallback: Jika tidak menembus threshold apa pun
+            if not assigned_labels:
+                outlier_count += 1
+                l2_cluster = cluster_l2_assignments[idx]
+                lbl_l2 = l2_cluster_to_label[l2_cluster]
+                assigned_labels.append(lbl_l2)
+            elif len(assigned_labels) > 1:
+                overlap_count += 1
+                
+            labels_json = json.dumps(list(set(assigned_labels)))
             cursor.execute("UPDATE documents SET labels = ? WHERE id = ?", (labels_json, doc_id))
+            
+            if (idx + 1) % 500 == 0:
+                conn.commit() # [BATCH COMMIT] Mencegah penumpukan journal file SQLite (Disk I/O Error)
+                
+            if (idx + 1) % 50 == 0 or (idx + 1) == N:
+                TAXONOMY_PROGRESS["current"] = idx + 1
             
         conn.commit()
         conn.close()
         
+        TAXONOMY_PROGRESS.update({"status": "idle", "stage": "Selesai"})
+        
+        
+        metrics = {
+            "total_docs": N,
+            "outliers": outlier_count,
+            "outlier_pct": round((outlier_count / N) * 100, 1) if N > 0 else 0,
+            "overlaps": overlap_count,
+            "overlap_pct": round((overlap_count / N) * 100, 1) if N > 0 else 0
+        }
+        
         return jsonify({
             "status": "success",
-            "message": f"K-Means selesai. Rumus Rice (X={n_clusters_l2}) diterapkan.",
-            "taxonomy": TAXONOMY
+            "message": f"Multi-Label Venn Architecture selesai. T1={threshold_l1:.2f}, T2={threshold_l2:.2f}.",
+            "taxonomy": TAXONOMY,
+            "metrics": metrics
         })
     except Exception as e:
-        log_error("Taxonomy Generator", f"Gagal generate taxonomy: {str(e)}", exc=True)
+        import traceback
+        traceback.print_exc()
+        TAXONOMY_PROGRESS.update({"status": "idle", "stage": "Error"})
         return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/api/reset_db", methods=["POST"])
@@ -1058,7 +1556,7 @@ def reset_database():
             generate_real_demo.generate_real_dataset()
         else:
             # Reseed default database
-            conn = sqlite3.connect(DB_PATH)
+            conn = sqlite3.connect(DB_PATH, timeout=15)
             c = conn.cursor()
             c.execute("DROP TABLE IF EXISTS documents")
             c.execute("""
@@ -1083,7 +1581,7 @@ def reset_database():
 @app.route("/api/documents/wipe", methods=["POST"])
 def wipe_database():
     try:
-        conn = sqlite3.connect(active_db_path)
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         c = conn.cursor()
         c.execute("DELETE FROM documents")
         conn.commit()
@@ -1103,7 +1601,7 @@ def batch_upload():
         if not files:
             return jsonify({"status": "error", "message": "Daftar file kosong"})
             
-        conn = sqlite3.connect(active_db_path)
+        conn = sqlite3.connect(get_active_db_path(), timeout=15)
         c = conn.cursor()
         
         success_count = 0

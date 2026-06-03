@@ -1,0 +1,76 @@
+{
+    "ekonomi": {
+        "Layer_1_Domain": [
+            "Domain Indonesia",
+            "Domain Spesies",
+            "Domain Cucu",
+            "Domain Kesultanan",
+            "Domain \ua98f\ua9b1"
+        ],
+        "Layer_2_Detail": [
+            "Sbsn Negara",
+            "Syariah Orang",
+            "00 000",
+            "Ekonomi Kopi",
+            "Maros An",
+            "Olahraga Klub",
+            "Kesultanan Kerajaan",
+            "Indonesia Ekonomi",
+            "Lagu Ciri",
+            "Pendahulu Jabatan",
+            "Kode Koordinat",
+            "Uang Koin",
+            "Spesies Lalat",
+            "Ak Mm",
+            "Kabupaten Gereja",
+            "Indonesia Nomor",
+            "Klasifikasi Ilmiah",
+            "Alexandra Ia",
+            "Cucu Rupee",
+            "\ua98f\ua9b1 \ua98f\ua9ae"
+        ]
+    },
+    "akademik": {
+        "Layer_1_Domain": [
+            "Domain Stkip",
+            "Domain Pendidikan",
+            "Domain Ilmiah",
+            "Domain Hipotesis"
+        ],
+        "Layer_2_Detail": [
+            "Politeknik Negeri",
+            "Pd Purwaceng",
+            "Dampak Faktor",
+            "Ilmiah Penelitian",
+            "Stkip Pgri",
+            "Jurnal Akses",
+            "Hipotesis Teori",
+            "Langganan Pelanggan",
+            "Universitas Perguruan",
+            "Pendidikan Tinggi",
+            "Pendidikan Komunitas"
+        ]
+    },
+    "politik": {
+        "Layer_1_Domain": [
+            "Domain Airin",
+            "Domain Barat",
+            "Domain Partai",
+            "Domain Shiori"
+        ],
+        "Layer_2_Detail": [
+            "Suara Akb48",
+            "Shiori Sato",
+            "Presiden Partai",
+            "Komisi Badan",
+            "Partai Jumlah",
+            "Perwakilan Dewan",
+            "Airin Kepada",
+            "Dpr Dewan",
+            "Barat Papua",
+            "Partai 000",
+            "2024 Pemilihan",
+            "2018 Bupati"
+        ]
+    }
+}

@@ -16,3 +16,171 @@ Traceback (most recent call last):
                  ^^^^^^^^^^^^^^
 ValueError: shapes (384,) and (5,) not aligned: 384 (dim 0) != 5 (dim 0)
 
+[2026-05-27 22:07:07] [SYSTEM: Recommend API] ERROR: Gagal menarik rekomendasi: Expression tree is too large (maximum depth 1000)
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 552, in recommend
+    cursor.execute(f"SELECT filename, labels, content, embedding FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
+sqlite3.OperationalError: Expression tree is too large (maximum depth 1000)
+
+[2026-05-29 09:56:34] [SYSTEM: Recommend API] ERROR: Gagal menarik rekomendasi: Expression tree is too large (maximum depth 1000)
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 681, in recommend
+    cursor.execute(f"SELECT filename, labels, content, embedding, id FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
+sqlite3.OperationalError: Expression tree is too large (maximum depth 1000)
+
+[2026-05-29 09:56:56] [SYSTEM: Recommend API] ERROR: Gagal menarik rekomendasi: Expression tree is too large (maximum depth 1000)
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 681, in recommend
+    cursor.execute(f"SELECT filename, labels, content, embedding, id FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
+sqlite3.OperationalError: Expression tree is too large (maximum depth 1000)
+
+[2026-05-29 09:57:54] [SYSTEM: Recommend API] ERROR: Gagal menarik rekomendasi: Expression tree is too large (maximum depth 1000)
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 681, in recommend
+    cursor.execute(f"SELECT filename, labels, content, embedding, id FROM documents WHERE {conditions} LIMIT ? OFFSET ?", (*params, limit, offset))
+sqlite3.OperationalError: Expression tree is too large (maximum depth 1000)
+
+[2026-05-29 16:13:58] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen: no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 436, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT 500")
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 16:33:38] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen: no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 466, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT 500")
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 16:33:39] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen: no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 466, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT 500")
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:18:21] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen: no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 466, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT 500")
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:18:43] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen: no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 466, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT 500")
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:44:25] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:44:42] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:48:54] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:50:13] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:54:50] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:54:55] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:55:00] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 17:55:07] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 18:05:58] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 18:06:05] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 18:27:15] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 18:29:02] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 507, in get_documents
+    cursor.execute(data_query, (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 18:29:04] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 507, in get_documents
+    cursor.execute(data_query, (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-29 18:29:06] [SYSTEM: DB Explorer] ERROR: Gagal memuat dokumen (Pagination): no such column: filename
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 475, in get_documents
+    cursor.execute("SELECT id, filename, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+sqlite3.OperationalError: no such column: filename
+
+[2026-05-30 23:16:40] [SYSTEM: Taxonomy Generator] ERROR: Gagal generate taxonomy: no such column: embedding
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1314, in generate_taxonomy
+    cursor.execute("SELECT id, content, embedding FROM documents")
+sqlite3.OperationalError: no such column: embedding
+

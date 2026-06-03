@@ -2,6 +2,19 @@
 
 Buku catatan eksekutif untuk eksperimen, temuan *bug*, dan rekam jejak keputusan intelektual.
 
+## [2026-05-28] - "Playful Neobrutalism & The $O(1)$ Semantic Cache"
+- **Masalah Estetika**: Antarmuka *Refined Retro Ledger* kita awalnya sangat statis. Elemen HTML murni tanpa *Tactile Feedback* menyebabkan sistem terlihat membosankan (*sterile*).
+- **Keputusan UI/UX**: Kami telah menginjeksi animasi **Playful Neobrutalism** secara sistemik ke dalam `components.css`. Menggunakan kurva bezier melompat (`cubic-bezier`), kami menghidupkan *Hard-Shadows*. Tombol kini terangkat miring (-1deg rotasi) saat di-*hover* dan menekan padat saat diklik. Baris *Database Explorer* kini mendorong teks dan menumbuhkan batas kiri tebal saat ditunjuk. Ini bukan sekadar kosmetik, melainkan konfirmasi psikologis interaksi bagi pengguna skala *Enterprise*.
+- **Penyelesaian Bottleneck Latensi**: Algoritma SQlite `json.loads` terbukti mencekik CPU pada data masif 384 dimensi. Oleh karena itu, arsitektur *Semantic Caching* (kamus `DB_EMBEDDING_CACHE` dalam RAM dan fungsi terbalut `@lru_cache`) telah diaktifkan, memangkas proses pembacaan *Dense Vector* repetitif ke kecepatan $O(1)$. 
+
+## [2026-05-28] - "The End of Hard Clustering: Multi-Label Paradigm Shift"
+- **Masalah Ditemukan**: Algoritma K-Means kami sebelumnya bersifat memonopoli (*Hard Clustering*), yang memaksa sebuah artikel teks masuk ke dalam satu kotak taksonomi yang kaku. Hal ini mengabaikan sifat bahasa alami yang ambigu dan lintas domain (*polysemous*).
+- **Teori Penyelidikan**: Kami meninjau teori *Topic Modeling* (seperti *Latent Dirichlet Allocation* oleh Blei) dan menemukan bahwa representasi "Venn Diagram" sangat superior. Sistem IR sejati harus mengizinkan dokumen memiliki persentase keanggotaan ganda pada berbagai klaster.
+- **Keputusan Desain**: 
+  1. **Algoritma Hibrida (Discovery vs Assignment):** Algoritma K-Means tidak dibuang sepenuhnya. K-Means (ditopang oleh Rice Rule) masih dipertahankan secara eksklusif untuk misi *Topic Discovery* (menggali titik sentroid label). Namun, pada fase *Label Assignment*, sistem beralih menggunakan matriks **Cosine Thresholding**.
+  2. **Threshold Default $\tau=0.50$**: Berpedoman pada literatur empiris *Vector Space Model* dari Salton, nilai 0.50 dipakai sebagai ambang kemiripan minimal (*cut-off*) agar dokumen dinilai relevan dengan label tersebut. Jika tidak mencapai ambang batas apa pun, sistem menggunakan metode *Argmax Fallback* agar dokumen tidak menjadi yatim piatu (*Orphan Document*).
+- **UX/Visual Mitigation**: Diagram Venn literal tidak digunakan karena *Visual Clutter* (berantakan ketika lebih dari 4 tumpang tindih). Kami menyelesaikannya menggunakan konsep *Tag Pills* berlapis pada *Database Explorer*, yang terasa jauh lebih elegan secara fungsional.
+
 ## [2026-05-27] - "Visual-Enhanced Pipeline & File-Based IR"
 - **Evolusi UX Data Science**: Halaman komando (Data Science) sering kali membingungkan pengguna awam atau dosen penilai jika disajikan hanya berupa teks dan tombol. Kami memutuskan untuk merombaknya menjadi **Node-based Pipeline Graph** yang interaktif. Grafik ini mendemonstrasikan secara literal bagaimana pangkalan data memompa data ke model ONNX dan masuk ke K-Means Engine. Garis penghubungnya ditenagai animasi CSS `@keyframes flow` yang akan menyala seolah-olah data sedang bergerak saat K-Means dieksekusi. Ini bukan *gimmick*, melainkan indikator proses *real-time* visual yang brilian.
 - **Transparansi Sistem (Accordion DB Explorer)**: Daripada meminta pengguna membuka SQLite Browser secara eksternal, kami menyediakan penampil dokumen raw via *Accordion Menu*. Ini mengefisienkan _payload_ karena hanya *header* yang ditampilkan di awal, dan tubuh penuh (teks asli 1000+ kata) baru dirender saat baris akordeon diklik. Sangat responsif.

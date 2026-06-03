@@ -954,7 +954,16 @@ class ModernApp:
         try:
             conn = sqlite3.connect(self.active_db_path)
             cursor = conn.cursor()
-            cursor.execute("SELECT filename, content, labels, embedding FROM documents")
+            
+            query_words = query.lower().split()
+            if not query_words:
+                messagebox.showwarning("Kueri Kosong", "Kata kunci tidak valid.")
+                return
+                
+            conditions = " OR ".join(["content LIKE ?" for _ in query_words])
+            params = [f"%{w}%" for w in query_words]
+            
+            cursor.execute(f"SELECT filename, content, labels, embedding FROM documents WHERE {conditions}", params)
             rows_db = cursor.fetchall()
             conn.close()
             if not rows_db:
@@ -1352,22 +1361,19 @@ class ModernApp:
             lbl_listbox.delete(0, tk.END)
             conn = sqlite3.connect(self.active_db_path)
             c = conn.cursor()
-            c.execute("SELECT labels FROM documents")
+            # [BIG DATA DOCTRINE - TEORI #1 & #11] Mendelegasikan parsing JSON ke C-Engine
+            c.execute("""
+                SELECT DISTINCT json_each.value 
+                FROM documents, json_each(documents.labels)
+                WHERE documents.labels IS NOT NULL AND documents.labels != '[]'
+            """)
             rows = c.fetchall()
             conn.close()
             
-            unique_labels = set()
-            for r in rows:
-                if r[0]:
-                    try:
-                        lbls = json.loads(r[0])
-                        for l in lbls:
-                            unique_labels.add(l)
-                    except:
-                        pass
+            unique_labels = [r[0] for r in rows if r[0]]
             
             # Sort alphabetically
-            sorted_lbls = sorted(list(unique_labels))
+            sorted_lbls = sorted(unique_labels)
             for l in sorted_lbls:
                 if filter_str.lower() in l.lower():
                     lbl_listbox.insert(tk.END, l)
@@ -1403,7 +1409,14 @@ class ModernApp:
             try:
                 conn = sqlite3.connect(self.active_db_path)
                 cursor = conn.cursor()
-                cursor.execute("SELECT id, labels FROM documents")
+                # [BIG DATA DOCTRINE - TEORI #7: Existential Short-Circuiting]
+                cursor.execute("""
+                    SELECT id, labels 
+                    FROM documents 
+                    WHERE EXISTS (
+                        SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?
+                    )
+                """, (old_name,))
                 rows = cursor.fetchall()
                 
                 updated_count = 0
@@ -1445,7 +1458,14 @@ class ModernApp:
             try:
                 conn = sqlite3.connect(self.active_db_path)
                 cursor = conn.cursor()
-                cursor.execute("SELECT id, labels FROM documents")
+                # [BIG DATA DOCTRINE - TEORI #7: Existential Short-Circuiting]
+                cursor.execute("""
+                    SELECT id, labels 
+                    FROM documents 
+                    WHERE EXISTS (
+                        SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?
+                    )
+                """, (lbl_to_delete,))
                 rows = cursor.fetchall()
                 
                 updated_count = 0

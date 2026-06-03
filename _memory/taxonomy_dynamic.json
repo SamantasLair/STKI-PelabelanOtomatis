@@ -1,0 +1,25 @@
+{
+    "akademik": {
+        "Layer_1_Domain": [
+            "Domain Pendidikan",
+            "Domain Hipotesis",
+            "Domain Ilmiah",
+            "Domain Stkip"
+        ],
+        "Layer_2_Detail": [
+            "Pd Purwaceng",
+            "Hipotesis Teori",
+            "Jurnal Akses",
+            "Pendidikan Tinggi",
+            "Universitas Perguruan",
+            "Ilmiah Penelitian",
+            "Politeknik Negeri",
+            "Dampak Faktor",
+            "Stkip Pgri",
+            "Langganan Pelanggan",
+            "Pendidikan Komunitas"
+        ],
+        "threshold_l1": 0.36,
+        "threshold_l2": 0.48
+    }
+}
