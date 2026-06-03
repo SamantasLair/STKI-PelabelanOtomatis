@@ -8,7 +8,8 @@ const App = {
                 this.loadLedgersList();
             }
         });
-        UIHelpers.initDatabaseSelector((dbType) => {
+        UIHelpers.initDatabaseSelector(async (dbType) => {
+            await App.updateGlobalStatus();
             if (document.getElementById('view-taxonomy').classList.contains('active')) {
                 TaxonomyVM.load();
             }

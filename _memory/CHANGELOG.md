@@ -2,6 +2,11 @@
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 
+## [v4.8.3] - 2026-06-03
+### Fixed
+- **Telemetry Synchronization (Database Switch)**: Memperbaiki *bug* antarmuka di mana jumlah dokumen (N) dan Target Rice (K) pada layar telemetri, serta nilai *slider* threshold, tidak diperbarui ketika ilmuwan data melakukan perpindahan pangkalan data melalui *dropdown* pemilih (*selector*). Fungsi `App.updateGlobalStatus()` kini dipicu secara otomatis pada rute *callback* `UIHelpers.initDatabaseSelector` untuk memastikan re-kalkulasi status global sinkron dengan tabel basis data terbaru.
+
+
 ## [v4.8.2] - 2026-05-30
 ### Fixed
 - **Existential Short-Circuiting (JSON1 Offloading)**: Memperbaiki kerentanan *OOM (Out-of-Memory)* kritis pada antarmuka GUI Desktop (`app_gui.py`) dan Backend Web (`app_web.py`). Sebelumnya, operasi `edit_label`, `delete_label`, dan `load_labels` melakukan *Full Table Scan* dan mem-parsing JSON secara iteratif di ruang memori Python. Operasi ini secara penuh didelegasikan ke *C-Engine SQLite* menggunakan klausa `EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?)` dan agregasi `SELECT DISTINCT json_each.value`. Ini menyempurnakan implementasi *BIG DATA DOCTRINE*, mengeliminasi *server freeze*, dan memangkas waktu load secara asimtotik.
