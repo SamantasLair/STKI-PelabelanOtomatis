@@ -2,6 +2,10 @@
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 
+## [v4.8.4] - 2026-06-04
+### Added
+- **Architectural Documentation Topology (L1-L2-L3)**: Menyelesaikan generasi sistem dokumentasi presentasi graf dalam direktori `_Presentasi/` yang memecah logika *STKI Core* dan *Data Science* ke dalam lapisan abstraksi (L1), penjabaran sub-sistem (L2), dan *Deep Technical Nodes* (L3) yang berisi teori matriks ekstrim, *source code tracing*, dan formula matematika *LaTeX* secara menyeluruh sesuai dengan protokol OML *Big Data Doctrine*.
+
 ## [v4.8.3] - 2026-06-03
 ### Fixed
 - **Telemetry Synchronization (Database Switch)**: Memperbaiki *bug* antarmuka di mana jumlah dokumen (N) dan Target Rice (K) pada layar telemetri, serta nilai *slider* threshold, tidak diperbarui ketika ilmuwan data melakukan perpindahan pangkalan data melalui *dropdown* pemilih (*selector*). Fungsi `App.updateGlobalStatus()` kini dipicu secara otomatis pada rute *callback* `UIHelpers.initDatabaseSelector` untuk memastikan re-kalkulasi status global sinkron dengan tabel basis data terbaru.
