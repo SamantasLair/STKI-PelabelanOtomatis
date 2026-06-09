@@ -13,6 +13,7 @@ env/
 
 # Folder Teori (Lokal Saja)
 _Fondasi/
+_doctrine/
 
 # Agen dan Testing
 .agents/
@@ -27,6 +28,7 @@ TKI/seed_alkitab.py
 # Abaikan semua pangkalan data SQLite karena terlalu berat (150MB+)
 *.db
 _BackupDemo/
+_RawData/
 sample_docs/
 DS/onnx_model/
 DS/results/

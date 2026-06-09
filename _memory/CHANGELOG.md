@@ -2,6 +2,15 @@
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 
+
+## [v4.9.1] - 2026-06-09
+### Verified
+- **Anti-Ghost Feature Audit (100% Integrity)**: Melakukan audit menyeluruh terhadap _fondasi/ dan _Presentasi/ untuk memverifikasi kesesuaian teori L1-L3 dengan kode produksi (.py / .js). Hasilnya mengonfirmasi tidak ada *Ghost Feature*. Metrik Evaluasi (12 QA Metrics), Big Data Doctrine (json_each SQLite), Venn Taxonomy (K-Means + Rice Rule), TPD Cosine, TextRank Distillation, Hybrid Search, dan Telemetry Visual semuanya terbukti telah tertanam dan berfungsi dalam sistem TKI/, ETL_HAKI/, dan _Quality_Assurance/ tanpa anomali.
+
+## [v4.9.0] - 2026-06-08
+### Changed
+- **B-Tree Polymorphic Database Architect (STKI Master)**: Memigrasikan arsitektur *File-Based Sharding* (multi-file `.db` seperti `db_politik.db`, `db_alkitab.db`) menjadi **Sentralisasi Murni** dalam 1 file `stki_master.db`. Setiap domain kini dipisahkan secara logis ke dalam "Paket Tabel Polimorfik" (`tb_docs_{domain}`, `tb_tax_{domain}`, `tb_set_{domain}`). Perubahan ini mengeliminasi masalah operasional *I/O Lock* lintas file dan memusatkan indeks B-Tree secara efisien. Refactoring besar-besaran dilakukan pada `TKI/app_web.py` dengan mengubah sintaks *Static SQL* menjadi *Formatted String SQL* (Dynamic Tables). Logika antarmuka UI/UX kini tidak lagi bertukar *Ledger File*, melainkan bermanuver antar-domain dalam satu *Master Connection*.
+
 ## [v4.8.4] - 2026-06-04
 ### Added
 - **Architectural Documentation Topology (L1-L2-L3)**: Menyelesaikan generasi sistem dokumentasi presentasi graf dalam direktori `_Presentasi/` yang memecah logika *STKI Core* dan *Data Science* ke dalam lapisan abstraksi (L1), penjabaran sub-sistem (L2), dan *Deep Technical Nodes* (L3) yang berisi teori matriks ekstrim, *source code tracing*, dan formula matematika *LaTeX* secara menyeluruh sesuai dengan protokol OML *Big Data Doctrine*.
@@ -115,7 +124,7 @@ Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 
 ### Fixed
 - **Testing Logic Correction (Dimension Mismatch)**: Memperbaiki *bug* krusial (`ValueError: shapes (384,) and (5,) not aligned`) pada `ir_metrics_engine.py` yang menggagalkan eksekusi evaluasi multi-domain. *Bug* dipicu oleh keberadaan residu *dummy embeddings* (berdimensi 5) pada pangkalan data tertentu. Solusi yang diimplementasikan adalah *on-the-fly embedding recalculation* (melakukan inferensi ulang *real-time* ke ukuran 384 dimensi) pada saat proses pengujian jika mendeteksi dimensi yang salah, sehingga evaluasi sistem dapat diselesaikan dengan 100% *pass rate*.
-- **Dimensional Collapse (Semantic Anisotropy)**: Menyelesaikan *bug* kritis pada model lama (`indobert-mini`) yang memicu Anisotropy ekstrim (kemiripan "struktur data" dan "sayur bayam" $\approx 93\%$, lihat analisis di [[dimensional_collapse_stki]]). Masalah diselesaikan dengan menginjeksikan skrip `export_sota_model.py` yang mengekstrak `paraphrase-multilingual-MiniLM-L12-v2` lengkap dengan *Mean Pooling* murni secara langsung ke format `.onnx`. Evaluasi membuktikan Anisotropy hancur total, dan *contextual polysemy* kembali sehat. Alur lengkap lihat [[PRESENTASI_SISTEM_STKI]].
+- **Dimensional Collapse (Semantic Anisotropy)**: Menyelesaikan *bug* kritis pada model lama (`indobert-mini`) yang memicu Anisotropy ekstrim (kemiripan "struktur data" dan "sayur bayam" $\approx 93\%$, lihat analisis di [[dimensional_collapse_stki]]). Masalah diselesaikan dengan menginjeksikan skrip `export_dense_model.py` yang mengekstrak `paraphrase-multilingual-MiniLM-L12-v2` lengkap dengan *Mean Pooling* murni secara langsung ke format `.onnx`. Evaluasi membuktikan Anisotropy hancur total, dan *contextual polysemy* kembali sehat. Alur lengkap lihat [[PRESENTASI_SISTEM_STKI]].
 
 
 ### Removed

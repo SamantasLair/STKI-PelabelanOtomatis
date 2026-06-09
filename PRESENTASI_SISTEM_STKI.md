@@ -8,8 +8,8 @@
 
 Sistem ini adalah mesin pencari hibrida (*Hybrid Search Engine*) dan klasifikasi otonom berbasis *Natural Language Processing* (NLP) yang didesain untuk lingkungan skala besar. Arsitektur terbagi secara absolut menjadi dua ranah utama:
 
-1. **Data Science (DS) - Ranah Hulu**: Di sinilah eksperimen akademis terjadi. Data kotor ditarik dari API eksternal (seperti Wikipedia), model dilatih (*fine-tuned*), parameter diuji, dan pada puncaknya, bobot kecerdasan diekspor menjadi *file* beku (*static weights*). Tahap ini setara dengan **TKT 3** (Pembuktian Konsep Laboratorium).
-2. **Sistem Temu Kembali Informasi (STKI) - Ranah Hilir**: Aplikasi web *offline* (Flask) yang ringan. Sistem ini sama sekali tidak memiliki fungsi *training*. Tugasnya murni mengeksekusi kecerdasan yang telah diekspor dari DS untuk melakukan pencarian semantik secara *real-time* dengan memori kecil dan latensi super rendah. Tahap ini adalah **TKT 4** (Validasi Lingkungan Nyata).
+1. **Data Science (DS) - Ranah Hulu**: Di sinilah eksperimen akademis terjadi. Data kotor ditarik dari API eksternal (seperti Wikipedia), model dilatih (*fine-tuned*), parameter diuji, dan pada puncaknya, bobot komputasi diekspor menjadi *file* beku (*static weights*). Tahap ini setara dengan **TKT 3** (Pembuktian Konsep Laboratorium).
+2. **Sistem Temu Kembali Informasi (STKI) - Ranah Hilir**: Aplikasi web *offline* (Flask) yang ringan. Sistem ini sama sekali tidak memiliki fungsi *training*. Tugasnya murni mengeksekusi inferensi matematis yang telah diekspor dari DS untuk melakukan pencarian semantik secara *real-time* dengan memori kecil dan latensi super rendah. Tahap ini adalah **TKT 4** (Validasi Lingkungan Nyata).
 
 ```mermaid
 graph LR
@@ -56,7 +56,7 @@ sequenceDiagram
 **Krisis Dimensional Collapse (Anisotropy):**
 Sebelumnya kita menghadapi masalah mematikan di mana kata yang tak memiliki benang merah sama sekali (misal: "Struktur Data" vs "Sayur Bayam") dinilai memiliki *Cosine Similarity* **93%** (sangat mirip). 
 Mengapa? Karena model lama terjebak pada *Dimensional Collapse*, fenomena di mana seluruh parameter vektor memampat ke sebuah "kerucut sempit" dalam ruang dimensi, menyebabkan apapun yang masuk akan memiliki jarak sudut yang berdekatan.
-*Penanggulangan:* Melalui skrip bedah `export_sota_model.py`, kita memotong arsitektur cacat tersebut dan menggantinya dengan ruang semantik luas milik SOTA MiniLM. Hasilnya, kerucut pecah, dan sistem kembali membedakan makna dengan presisi. Riwayat kejadian ini terekam detail di [[CHANGELOG]] dan [[DIARY]] serta kajian teoretisnya ada di [[dimensional_collapse_stki]].
+*Penanggulangan:* Melalui skrip bedah `export_sota_model.py`, kita memotong arsitektur cacat tersebut dan menggantinya dengan ruang semantik luas milik Dense MiniLM. Hasilnya, kerucut pecah, dan sistem kembali membedakan makna dengan presisi. Riwayat kejadian ini terekam detail di [[CHANGELOG]] dan [[DIARY]] serta kajian teoretisnya ada di [[dimensional_collapse_stki]].
 
 ```mermaid
 graph TD
@@ -88,7 +88,7 @@ Di sisi STKI (Aplikasi Web Flask yang digunakan end-user), saat pengguna mengung
 - **DOCX**: Dibedah hierarki paragraf XML-nya via `python-docx`.
 - **CSV & XLSX**: Matriks kolom tabularnya dimuat ke struktur RAM `pandas`, lalu semua teks kolom objek diikat (*concatenate*) menjadi satu paragraf *string* besar tak terputus.
 
-Setelah teks telanjang didapatkan, karena memori RAM dibatasi, teks disaring (*distilled*) menjadi 5 kalimat pertama saja. Teks ini dilempar ke Pipa ONNX untuk di-*Mean Pooling*, dan representasi vektor 384 dimensinya dikirim dan di-*serialize* menjadi teks JSON panjang ke dalam *database* SQLite.
+Setelah teks telanjang didapatkan, sistem tidak memotong 5 kalimat pertama secara buta (karena akan memicu *Truncation Loss*). Teks raksasa tersebut disaring secara cerdas menggunakan algoritma **TextRank Distillation** (Metode sentralitas PageRank untuk teks) agar terekstrak kalimat-kalimat yang paling padat secara semantik hingga panjang maksimal 256 token. Teks "Emas" inilah yang dilempar ke Pipa ONNX untuk di-*Mean Pooling*, dan representasi vektor 384 dimensinya dikirim menjadi JSON panjang ke *database* SQLite.
 
 ```mermaid
 graph LR
@@ -99,7 +99,7 @@ graph LR
     C --> F[Teks Mentah]
     D --> F
     E --> F
-    F --> G[Ekstraksi Embedding via ONNX SOTA]
+    F --> G[Ekstraksi Embedding via ONNX Dense]
     G --> H[(SQLite Relational Database)]
 ```
 
@@ -110,7 +110,7 @@ Inilah modul terpenting STKI. Pencarian!
 Alih-alih mencari kecocokan susunan huruf persis (*Lexical Search*) layaknya CTRL+F, STKI menggabungkan Pencarian Makna Murni (*Dense*) dengan Pencarian Teks Kaku (*Sparse BM25*). Ini dinamakan **Hybrid Search**.
 
 *Mengapa wajib di-hibridakan?*
-- Jika Anda mencari kata salah ketik atau kata bersinonim yang tidak ada secara huruf di dokumen (contoh: kueri pencarian Anda "Kendaraan", padahal di isi teks yang tertulis hanya "Mobil Toyota"), **Dense SOTA ONNX** yang akan menemukannya via pemahaman makna.
+- Jika Anda mencari kata salah ketik atau kata bersinonim yang tidak ada secara huruf di dokumen (contoh: kueri pencarian Anda "Kendaraan", padahal di isi teks yang tertulis hanya "Mobil Toyota"), **Dense ONNX** yang akan menemukannya via pemahaman makna.
 - Sebaliknya, jika Anda mencari akronim hukum atau singkatan asing yang ejaannya harus mutlak (contoh: "KUHP Pasal 228"), ONNX berpotensi kewalahan karena makna bisa tersebar. Di sinilah **Sparse BM25** bereaksi cepat menangkap leksikal persis.
 
 **Rumus Fusi Hibrida Timbangan Parameter Alpha ($\alpha$):**
@@ -162,15 +162,15 @@ sequenceDiagram
 =====
 ## SLIDE 9: ARSITEKTUR DATABASE TERISOLASI (MULTI-DOMAIN SQLITE)
 
-Untuk menjamin kebersihan memori *cache* dan menunjang *skalabilitas* (agar pencarian tidak *loading* 5 menit karena menelusuri ratusan ribu data lintas jurusan), sistem menggunakan topologi **Multi-Domain Database Berpencar**.
+Untuk menjamin kebersihan memori *cache* dan menunjang *skalabilitas* (agar pencarian tidak *loading* 5 menit karena menelusuri ratusan ribu data lintas jurusan), sistem menggunakan topologi **Centralized Polymorphic Database**.
 
-Alih-alih menjejalkan semuanya ke dalam 1 lumbung, STKI secara dinamis memutuskan pipa *Database* mana yang aktif:
-1. `academic_metadata.db` $\rightarrow$ Korpus Inti (Ilmu Komputer)
-2. `academic_demo_real.db` $\rightarrow$ Repositori Demonstrasi Dummy
-3. `db_politik.db` $\rightarrow$ Khusus Politik Pemerintahan
-4. `db_ekonomi.db` $\rightarrow$ Khusus Finansial
-5. `db_bisnis.db` $\rightarrow$ Khusus Perusahaan
-6. `db_etika.db` $\rightarrow$ Khusus Norma Sosial
+Alih-alih menjejalkan semuanya ke dalam 1 lumbung campur aduk, STKI memisahkan tabel secara dinamis dalam 1 master `stki_master.db`:
+1. `tb_docs_akademik` $\rightarrow$ Korpus Inti (Ilmu Komputer)
+2. `tb_docs_demo_real` $\rightarrow$ Repositori Demonstrasi Dummy
+3. `tb_docs_politik` $\rightarrow$ Khusus Politik Pemerintahan
+4. `tb_docs_ekonomi` $\rightarrow$ Khusus Finansial
+5. `tb_docs_bisnis` $\rightarrow$ Khusus Perusahaan
+6. `tb_docs_etika` $\rightarrow$ Khusus Norma Sosial
 
 Dengan ini, *Semantic Interference* (di mana hasil pencarian Ekonomi terganggu oleh vektor mirip dari dunia Politik) dapat dihancurkan 100%.
 
@@ -184,7 +184,7 @@ Bagaimana kita membuktikan secara ilmiah bahwa aplikasi kita tidak sekadar "jala
 - **Latency / Execution Time Complexity** $\rightarrow$ Eksekusi pencarian vektor dibatasi maksimum $\approx O(N)$ sub-linear, tidak peduli sebanyak apa database, waktu wajib di bawah 2.0 Detik.
 - **Memory Protection Limit** $\rightarrow$ Kalkulasi ukuran matriks *Float32* untuk jaminan server kebal dari kelumpuhan memori (*Out Of Memory*).
 
-**2. Metrik Skoring Kecerdasan Model Semantik (Model Intelligence Metrics)** (Landasan Teori: [[teori_qa_metrics]])
+**2. Metrik Skoring Akurasi Semantik (Model Evaluation Metrics)** (Landasan Teori: [[teori_qa_metrics]])
 - **NDCG (Normalized Discounted Cumulative Gain)** $\rightarrow$ Mengukur bahwa ranking bukan sekadar urut 1 sampai 5, tetapi mempertimbangkan gradasi relevansi. Sistem tahu mana dokumen *sangat mirip*, *mirip*, dan *cukup*.
 - **Polysemy Disambiguation** $\rightarrow$ Evaluasi ekstrem di mana sistem membuktikan kemampuannya membedakan kalimat polisemi ambiguitas tinggi, contoh: Kata "bisa" (Mampu) versus "bisa" (Racun mematikan ular).
 - **OOV & Typo Robustness** $\rightarrow$ Menggunakan teori Subword Jaccard, model harus tetap lolos dalam mengenali kueri yang salah ejaan (contoh: *Pmrintah Daerh Rgulasi* dipahami mutlak sebagai "Pemerintah Daerah Regulasi").

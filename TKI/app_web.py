@@ -28,31 +28,37 @@ app = Flask(__name__,
 DB_DIR = os.path.join(ROOT_DIR, "_databases")
 os.makedirs(DB_DIR, exist_ok=True)
 
-def get_available_databases():
-    dbs = []
-    if os.path.exists(DB_DIR):
-        for f in os.listdir(DB_DIR):
-            if f.endswith(".db"):
-                dbs.append(f)
-    return dbs
+def get_available_domains():
+    domains = []
+    master_path = os.path.join(DB_DIR, "stki_master.db")
+    if os.path.exists(master_path):
+        try:
+            conn = sqlite3.connect(master_path)
+            c = conn.cursor()
+            c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'tb_docs_%'")
+            for row in c.fetchall():
+                domains.append(row[0].replace('tb_docs_', ''))
+            conn.close()
+        except:
+            pass
+    if not domains:
+        domains = ["default"]
+    return domains
 
-def get_active_db_type():
+def get_active_domain():
     state_file = os.path.join(DB_DIR, "active_db.txt")
     if os.path.exists(state_file):
         try:
             with open(state_file, 'r') as f:
                 target = f.read().strip()
-                if target in get_available_databases():
+                if target in get_available_domains():
                     return target
         except:
             pass
-    dbs = get_available_databases()
-    return dbs[0] if dbs else "default.db"
+    return get_available_domains()[0]
 
-def get_active_db_path():
-    return os.path.join(DB_DIR, get_active_db_type())
 
-def set_active_db_type(target):
+def set_active_domain(target):
     state_file = os.path.join(DB_DIR, "active_db.txt")
     try:
         with open(state_file, 'w') as f:
@@ -60,10 +66,10 @@ def set_active_db_type(target):
     except Exception as e:
         print(f"Error saving state: {e}")
 
-active_db_type = get_active_db_type()
-if not get_available_databases():
-    open(get_active_db_path(), 'a').close()
-active_db_path = get_active_db_path()
+active_domain = get_active_domain()
+MASTER_DB_PATH = os.path.join(DB_DIR, "stki_master.db")
+if not os.path.exists(MASTER_DB_PATH):
+    open(MASTER_DB_PATH, 'a').close()
 
 # Taksonomi Dinamis (Diload dari SQLite)
 # TAXONOMY_FILE deprecated
@@ -85,38 +91,35 @@ def get_taxonomy_progress():
 
 @app.before_request
 def sync_global_db_state():
-    global active_db_type, active_db_path, TAXONOMY, DB_EMBEDDING_CACHE
-    current_type = get_active_db_type()
-    if 'active_db_type' not in globals() or active_db_type != current_type:
-        active_db_type = current_type
-        active_db_path = get_active_db_path()
-        TAXONOMY = load_taxonomy(active_db_path)
+    global active_domain, TAXONOMY, DB_EMBEDDING_CACHE
+    current_domain = get_active_domain()
+    if 'active_domain' not in globals() or active_domain != current_domain:
+        active_domain = current_domain
+        TAXONOMY = load_taxonomy(active_domain)
         DB_EMBEDDING_CACHE = {}
 
-def get_db_embedding(active_db_type, doc_id, emb_str):
+def get_db_embedding(active_domain, doc_id, emb_str):
     cache_key = (active_db_type, doc_id)
     if cache_key not in DB_EMBEDDING_CACHE:
         DB_EMBEDDING_CACHE[cache_key] = np.array(json.loads(emb_str))
     return DB_EMBEDDING_CACHE[cache_key]
 
-def load_taxonomy(db_path):
+def load_taxonomy(domain):
     tax = {"Layer_1_Domain": [], "Layer_2_Detail": [], "threshold_l1": 0.50, "threshold_l2": 0.55}
-    if not os.path.exists(db_path):
-        return tax
     try:
-        conn = sqlite3.connect(db_path, timeout=15)
+        conn = sqlite3.connect(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
-        c.execute("CREATE TABLE IF NOT EXISTS taxonomy_labels (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
-        c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        c.execute(f"CREATE TABLE IF NOT EXISTS tb_tax_{domain} (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
+        c.execute(f"CREATE TABLE IF NOT EXISTS tb_set_{domain} (key TEXT PRIMARY KEY, value TEXT)")
         conn.commit()
         
-        c.execute("SELECT name FROM taxonomy_labels WHERE layer='Layer_1_Domain'")
+        c.execute(f"SELECT name FROM tb_tax_{domain} WHERE layer='Layer_1_Domain'")
         tax["Layer_1_Domain"] = [row[0] for row in c.fetchall()]
         
-        c.execute("SELECT name FROM taxonomy_labels WHERE layer='Layer_2_Detail'")
+        c.execute(f"SELECT name FROM tb_tax_{domain} WHERE layer='Layer_2_Detail'")
         tax["Layer_2_Detail"] = [row[0] for row in c.fetchall()]
         
-        c.execute("SELECT key, value FROM settings")
+        c.execute(f"SELECT key, value FROM tb_set_{domain}")
         for k, v in c.fetchall():
             if k in ["threshold_l1", "threshold_l2"]:
                 tax[k] = float(v)
@@ -132,7 +135,7 @@ def save_setting(db_path, key, value):
     try:
         conn = sqlite3.connect(db_path, timeout=15)
         c = conn.cursor()
-        c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        c.execute(f"CREATE TABLE IF NOT EXISTS tb_set_{domain} (key TEXT PRIMARY KEY, value TEXT)")
         c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
         conn.commit()
         conn.close()
@@ -146,18 +149,18 @@ def save_taxonomy(db_type, taxonomy_dict):
     try:
         conn = sqlite3.connect(db_path, timeout=15)
         c = conn.cursor()
-        c.execute("CREATE TABLE IF NOT EXISTS taxonomy_labels (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
-        c.execute("DELETE FROM taxonomy_labels")
+        c.execute(f"CREATE TABLE IF NOT EXISTS tb_tax_{domain} (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
+        c.execute("DELETE FROM tb_tax_{domain}")
         
         for l1 in taxonomy_dict.get("Layer_1_Domain", []):
             try:
-                c.execute("INSERT INTO taxonomy_labels (layer, name) VALUES (?, ?)", ("Layer_1_Domain", l1))
+                c.execute(f"INSERT INTO tb_tax_{active_domain} (layer, name) VALUES (?, ?)", ("Layer_1_Domain", l1))
             except sqlite3.IntegrityError:
                 pass
                 
         for l2 in taxonomy_dict.get("Layer_2_Detail", []):
             try:
-                c.execute("INSERT INTO taxonomy_labels (layer, name) VALUES (?, ?)", ("Layer_2_Detail", l2))
+                c.execute(f"INSERT INTO tb_tax_{active_domain} (layer, name) VALUES (?, ?)", ("Layer_2_Detail", l2))
             except sqlite3.IntegrityError:
                 pass
                 
@@ -166,7 +169,7 @@ def save_taxonomy(db_type, taxonomy_dict):
     except Exception as e:
         print(f"Error saving taxonomy DB: {e}")
 
-TAXONOMY = load_taxonomy(active_db_path)
+TAXONOMY = load_taxonomy(MASTER_DB_PATH)
 
 import datetime
 import traceback
@@ -342,7 +345,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
         relabel_progress["status"] = "running"
         conn = sqlite3.connect(db_path, timeout=15)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, content FROM documents")
+        cursor.execute(f"SELECT id, content FROM tb_docs_{active_domain}")
         rows = cursor.fetchall()
         
         if not rows:
@@ -444,7 +447,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 assigned_l1 = ["Tidak Terklasifikasi"]
             
             predicted_labels = list(set(assigned_l1 + assigned_l2))
-            cursor.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(predicted_labels), doc_id))
+            cursor.execute(f"UPDATE tb_docs_{active_domain} SET labels = ? WHERE id = ?", (json.dumps(predicted_labels), doc_id))
             
             relabel_progress["current"] = idx + 1
             relabel_progress["percentage"] = int(((idx + 1) / total) * 100)
@@ -477,58 +480,58 @@ def get_documents():
         limit = int(request.args.get('limit', 50))
         filter_type = request.args.get('filter', 'all')
         
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         cursor = conn.cursor()
         
         import time
         t_start = time.time()
         
-        cursor.execute("PRAGMA table_info(documents)")
+        cursor.execute(f"PRAGMA table_info(tb_docs_{active_domain})")
         cols = [col[1] for col in cursor.fetchall()]
         has_filename = 'filename' in cols
         filename_col = "filename" if has_filename else "id as filename"
         
         if filter_type == 'all':
-            cursor.execute("SELECT COUNT(id) FROM documents")
+            cursor.execute(f"SELECT COUNT(id) FROM tb_docs_{active_domain}")
             total_docs = cursor.fetchone()[0]
             offset = (page - 1) * limit
-            cursor.execute(f"SELECT id, {filename_col}, labels, content FROM documents ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
+            cursor.execute(f"SELECT id, {filename_col}, labels, content FROM tb_docs_{active_domain} ORDER BY id DESC LIMIT ? OFFSET ?", (limit, offset))
             rows = cursor.fetchall()
         else:
             # [BIG DATA DOCTRINE] C-Engine JSON1 Offloading (Zero Python RAM Allocation)
             if filter_type == 'outlier':
-                count_query = """
-                    SELECT COUNT(id) FROM documents 
+                count_query = f"""
+                    SELECT COUNT(id) FROM tb_docs_{active_domain} 
                     WHERE labels IS NULL OR labels = '[]' OR json_array_length(labels) = 0 
-                    OR EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
+                    OR EXISTS (SELECT 1 FROM json_each(tb_docs_{active_domain}.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
                 """
                 data_query = f"""
-                    SELECT id, {filename_col}, labels, content FROM documents 
+                    SELECT id, {filename_col}, labels, content FROM tb_docs_{active_domain} 
                     WHERE labels IS NULL OR labels = '[]' OR json_array_length(labels) = 0 
-                    OR EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
+                    OR EXISTS (SELECT 1 FROM json_each(tb_docs_{active_domain}.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
                     ORDER BY id DESC LIMIT ? OFFSET ?
                 """
             elif filter_type == 'overlap':
-                count_query = """
-                    SELECT COUNT(id) FROM documents 
+                count_query = f"""
+                    SELECT COUNT(id) FROM tb_docs_{active_domain} 
                     WHERE json_array_length(labels) > 1 
-                    AND NOT EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
+                    AND NOT EXISTS (SELECT 1 FROM json_each(tb_docs_{active_domain}.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
                 """
                 data_query = f"""
-                    SELECT id, {filename_col}, labels, content FROM documents 
+                    SELECT id, {filename_col}, labels, content FROM tb_docs_{active_domain} 
                     WHERE json_array_length(labels) > 1 
-                    AND NOT EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
+                    AND NOT EXISTS (SELECT 1 FROM json_each(tb_docs_{active_domain}.labels) WHERE json_each.value = 'Tidak Terklasifikasi')
                     ORDER BY id DESC LIMIT ? OFFSET ?
                 """
             elif filter_type.startswith('label_'):
                 target_label = filter_type[6:] # Menghilangkan prefix "label_"
-                count_query = """
-                    SELECT COUNT(id) FROM documents 
-                    WHERE EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?)
+                count_query = f"""
+                    SELECT COUNT(id) FROM tb_docs_{active_domain} 
+                    WHERE EXISTS (SELECT 1 FROM json_each(tb_docs_{active_domain}.labels) WHERE json_each.value = ?)
                 """
                 data_query = f"""
-                    SELECT id, {filename_col}, labels, content FROM documents 
-                    WHERE EXISTS (SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?)
+                    SELECT id, {filename_col}, labels, content FROM tb_docs_{active_domain} 
+                    WHERE EXISTS (SELECT 1 FROM json_each(tb_docs_{active_domain}.labels) WHERE json_each.value = ?)
                     ORDER BY id DESC LIMIT ? OFFSET ?
                 """
                 cursor.execute(count_query, (target_label,))
@@ -574,11 +577,11 @@ def get_documents():
 
 @app.route("/api/status", methods=["GET"])
 def get_status():
-    global active_db_type, active_db_path, TAXONOMY
+    global active_db_type, MASTER_DB_PATH, TAXONOMY
     
     # Buat DB jika belum ada
-    if not os.path.exists(active_db_path):
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+    if not os.path.exists(MASTER_DB_PATH):
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS documents (
@@ -592,9 +595,9 @@ def get_status():
         conn.commit()
         conn.close()
         
-    conn = sqlite3.connect(get_active_db_path(), timeout=15)
+    conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM documents")
+    c.execute(f"SELECT COUNT(*) FROM tb_docs_{active_domain}")
     total_docs = c.fetchone()[0]
     conn.close()
     
@@ -602,7 +605,7 @@ def get_status():
     optimal_x = math.ceil(2 * (total_docs ** (1/3))) if total_docs > 0 else 0
     
     # [ANTI-OOM & MEMORY SAFE FIRST] 
-    # Alih-alih melooping json.loads() pada puluhan ribu row dari "SELECT labels FROM documents", 
+    # Alih-alih melooping json.loads() pada puluhan ribu row dari f"SELECT labels FROM tb_docs_{active_domain}", 
     # kita hitung O(1) dari TAXONOMY memory.
     actual_labels_count = len(TAXONOMY.get("Layer_1_Domain", [])) + len(TAXONOMY.get("Layer_2_Detail", []))
                 
@@ -612,13 +615,13 @@ def get_status():
         "ekonomi": "Ekonomi Makro & Mikro (Demo Kontaminasi)",
         "bisnis": "Peraturan Bisnis & Korporat",
         "etika": "Etika & Hukum Hak Asasi",
-        "demo_real": "Teknologi & Komputer (Demo Real)"
+        "academic_demo_real": "Teknologi & Komputer (Demo Real)"
     }
-    db_name = db_names.get(active_db_type, "Unknown Database")
+    db_name = db_names.get(active_domain, "Domain: " + active_domain)
     
     return jsonify({
         "active_db": db_name,
-        "db_type": active_db_type,
+        "db_type": active_domain,
         "total_docs": total_docs,
         "optimal_labels_count": optimal_x,
         "actual_labels_count": actual_labels_count,
@@ -627,94 +630,96 @@ def get_status():
 
 @app.route("/api/switch_db", methods=["POST"])
 def switch_db():
-    global active_db_type, active_db_path, TAXONOMY, DB_EMBEDDING_CACHE
+    global active_domain, TAXONOMY, DB_EMBEDDING_CACHE
     data = request.get_json()
     target = data.get("db_type", "")
     
-    if target in get_available_databases():
-        set_active_db_type(target)
-        active_db_type = target
-        active_db_path = get_active_db_path()
-        TAXONOMY = load_taxonomy(active_db_path)
+    if target in get_available_domains():
+        set_active_domain(target)
+        active_domain = target
+        TAXONOMY = load_taxonomy(active_domain)
         DB_EMBEDDING_CACHE = {} # Reset cache
-        return jsonify({"status": "success", "message": f"Berhasil dialihkan ke Ledger {target}"})
-    return jsonify({"status": "error", "message": "Ledger tidak ditemukan."})
+        return jsonify({"status": "success", "message": f"Berhasil dialihkan ke Domain {target}"})
+    return jsonify({"status": "error", "message": "Domain tidak ditemukan."})
 
 @app.route("/api/ledgers", methods=["GET"])
 def get_ledgers():
-    dbs = get_available_databases()
-    return jsonify({"status": "success", "ledgers": dbs, "active": active_db_type})
+    domains = get_available_domains()
+    return jsonify({"status": "success", "ledgers": domains, "active": active_domain})
 
 @app.route("/api/ledgers/create", methods=["POST"])
 def create_ledger():
     data = request.get_json()
     name = data.get("name", "").strip()
     if not name:
-        return jsonify({"status": "error", "message": "Nama ledger tidak boleh kosong."})
-    if not name.endswith(".db"):
-        name += ".db"
+        return jsonify({"status": "error", "message": "Nama domain tidak boleh kosong."})
     
-    db_path = os.path.join(DB_DIR, name)
-    if os.path.exists(db_path):
-        return jsonify({"status": "error", "message": "Ledger dengan nama ini sudah ada."})
+    name = "".join(c for c in name if c.isalnum() or c == '_').lower()
+    
+    if name in get_available_domains():
+        return jsonify({"status": "error", "message": "Domain dengan nama ini sudah ada."})
     
     try:
-        # Buat file kosong
-        open(db_path, 'a').close()
-        # Initialize taxonomy to create tables
-        load_taxonomy(db_path)
-        return jsonify({"status": "success", "message": f"Ledger {name} berhasil dibuat.", "ledgers": get_available_databases()})
+        load_taxonomy(name) # Ini akan membuat tabel otomatis
+        return jsonify({"status": "success", "message": f"Domain {name} berhasil dibuat.", "ledgers": get_available_domains()})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/api/ledgers/rename", methods=["POST"])
 def rename_ledger():
-    global active_db_type, active_db_path
+    global active_domain
     data = request.get_json()
     old_name = data.get("old_name", "").strip()
     new_name = data.get("new_name", "").strip()
     
-    if not new_name.endswith(".db"):
-        new_name += ".db"
+    new_name = "".join(c for c in new_name if c.isalnum() or c == '_').lower()
         
-    old_path = os.path.join(DB_DIR, old_name)
-    new_path = os.path.join(DB_DIR, new_name)
-    
-    if not os.path.exists(old_path):
-        return jsonify({"status": "error", "message": "Ledger lama tidak ditemukan."})
-    if os.path.exists(new_path):
-        return jsonify({"status": "error", "message": "Nama ledger baru sudah digunakan."})
+    if old_name not in get_available_domains():
+        return jsonify({"status": "error", "message": "Domain lama tidak ditemukan."})
+    if new_name in get_available_domains():
+        return jsonify({"status": "error", "message": "Nama domain baru sudah digunakan."})
         
     try:
-        os.rename(old_path, new_path)
-        if active_db_type == old_name:
-            active_db_type = new_name
-            active_db_path = new_path
-        return jsonify({"status": "success", "message": f"Berhasil diubah menjadi {new_name}", "ledgers": get_available_databases(), "active": active_db_type})
+        conn = sqlite3.connect(MASTER_DB_PATH)
+        c = conn.cursor()
+        c.execute(f"ALTER TABLE tb_docs_{old_name} RENAME TO tb_docs_{new_name}")
+        c.execute(f"ALTER TABLE tb_tax_{old_name} RENAME TO tb_tax_{new_name}")
+        c.execute(f"ALTER TABLE tb_set_{old_name} RENAME TO tb_set_{new_name}")
+        conn.commit()
+        conn.close()
+        
+        if active_domain == old_name:
+            active_domain = new_name
+            set_active_domain(new_name)
+        return jsonify({"status": "success", "message": f"Berhasil diubah menjadi {new_name}", "ledgers": get_available_domains(), "active": active_domain})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
 @app.route("/api/ledgers/delete", methods=["POST"])
 def delete_ledger():
-    global active_db_type, active_db_path, TAXONOMY
+    global active_domain, TAXONOMY
     data = request.get_json()
     target = data.get("name", "").strip()
     
-    db_path = os.path.join(DB_DIR, target)
-    if not os.path.exists(db_path):
-        return jsonify({"status": "error", "message": "Ledger tidak ditemukan."})
+    if target not in get_available_domains():
+        return jsonify({"status": "error", "message": "Domain tidak ditemukan."})
         
     try:
-        os.remove(db_path)
-        dbs = get_available_databases()
-        if active_db_type == target:
-            active_db_type = dbs[0] if dbs else "default.db"
-            active_db_path = os.path.join(DB_DIR, active_db_type)
-            if not dbs:
-                open(active_db_path, 'a').close()
-            TAXONOMY = load_taxonomy(active_db_path)
+        conn = sqlite3.connect(MASTER_DB_PATH)
+        c = conn.cursor()
+        c.execute(f"DROP TABLE IF EXISTS tb_docs_{target}")
+        c.execute(f"DROP TABLE IF EXISTS tb_tax_{target}")
+        c.execute(f"DROP TABLE IF EXISTS tb_set_{target}")
+        conn.commit()
+        conn.close()
+        
+        domains = get_available_domains()
+        if active_domain == target:
+            active_domain = domains[0] if domains else "default"
+            set_active_domain(active_domain)
+            TAXONOMY = load_taxonomy(active_domain)
             
-        return jsonify({"status": "success", "message": f"Ledger {target} berhasil dihapus.", "ledgers": get_available_databases(), "active": active_db_type})
+        return jsonify({"status": "success", "message": f"Domain {target} berhasil dihapus.", "ledgers": get_available_domains(), "active": active_domain})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
@@ -726,7 +731,7 @@ def update_taxonomy_settings():
         k = data.get("key")
         v = data.get("value")
         if k and v is not None:
-            save_setting(active_db_path, k, v)
+            save_setting(active_domain, k, v)
         return jsonify({"status": "success", "taxonomy": TAXONOMY})
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -739,14 +744,14 @@ def add_taxonomy_label():
         name = data.get("name")
         if not layer or not name: return jsonify({"error": "Missing layer or name"})
         
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
-        c.execute("INSERT INTO taxonomy_labels (layer, name) VALUES (?, ?)", (layer, name))
+        c.execute(f"INSERT INTO tb_tax_{active_domain} (layer, name) VALUES (?, ?)", (layer, name))
         conn.commit()
         conn.close()
         
         global TAXONOMY
-        TAXONOMY = load_taxonomy(active_db_path)
+        TAXONOMY = load_taxonomy(MASTER_DB_PATH)
         return jsonify({"status": "success", "taxonomy": TAXONOMY})
     except sqlite3.IntegrityError:
         return jsonify({"error": "Label sudah ada."})
@@ -764,16 +769,16 @@ def edit_taxonomy_label():
         if not old_name or not new_name or not layer: 
             return jsonify({"error": "Invalid data"})
             
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         c = conn.cursor()
-        c.execute("UPDATE taxonomy_labels SET name=? WHERE layer=? AND name=?", (new_name, layer, old_name))
+        c.execute(f"UPDATE tb_tax_{active_domain} SET name=? WHERE layer=? AND name=?", (new_name, layer, old_name))
         conn.commit()
         conn.close()
         
         global TAXONOMY
-        TAXONOMY = load_taxonomy(active_db_path)
+        TAXONOMY = load_taxonomy(MASTER_DB_PATH)
         
-        threading.Thread(target=async_relabel_task, args=(active_db_path, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"])).start()
+        threading.Thread(target=async_relabel_task, args=(MASTER_DB_PATH, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"])).start()
         
         return jsonify({"status": "success", "taxonomy": TAXONOMY})
     except sqlite3.IntegrityError:
@@ -788,16 +793,16 @@ def delete_taxonomy_label():
         name = data.get("name")
         layer = data.get("layer")
         
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         c = conn.cursor()
-        c.execute("DELETE FROM taxonomy_labels WHERE layer=? AND name=?", (layer, name))
+        c.execute("DELETE FROM tb_tax_{domain} WHERE layer=? AND name=?", (layer, name))
         conn.commit()
         conn.close()
         
         global TAXONOMY
-        TAXONOMY = load_taxonomy(active_db_path)
+        TAXONOMY = load_taxonomy(MASTER_DB_PATH)
         
-        threading.Thread(target=async_relabel_task, args=(active_db_path, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"])).start()
+        threading.Thread(target=async_relabel_task, args=(MASTER_DB_PATH, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"])).start()
         
         return jsonify({"status": "success", "taxonomy": TAXONOMY})
     except Exception as e:
@@ -813,9 +818,10 @@ def search():
         if not query:
             return jsonify([])
             
+        # CORE_ENG: Semantic Vectorization via Dense MiniLM-L12 (ONNX)
         doc_vector = get_onnx_embedding(query)
         
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(MASTER_DB_PATH, timeout=15)
         cursor = conn.cursor()
         
         query_words = query.lower().split()
@@ -825,7 +831,7 @@ def search():
         conditions = " OR ".join(["content LIKE ?" for _ in query_words])
         params = [f"%{w}%" for w in query_words]
         
-        cursor.execute(f"SELECT filename, labels, content, embedding, id FROM documents WHERE {conditions}", params)
+        cursor.execute(f"SELECT filename, labels, content, embedding, id FROM tb_docs_{active_domain} WHERE {conditions}", params)
         rows_db = cursor.fetchall()
         conn.close()
         
@@ -835,8 +841,9 @@ def search():
         corpus = [row[2] for row in rows_db]
         filenames = [row[0] for row in rows_db]
         labels_list = [json.loads(row[1]) for row in rows_db]
-        embeddings = [get_db_embedding(active_db_type, row[4], row[3]) for row in rows_db]
+        embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
         
+        # CORE_ENG: Lexical Pipeline via Okapi BM25
         bm25 = BM25(corpus)
         query_words = query.lower().split()
         bm25_scores = [bm25.get_score(query_words, i) for i in range(len(corpus))]
@@ -911,9 +918,9 @@ def recommend():
         conditions = " OR ".join(["content LIKE ?" for _ in query_words])
         params = [f"%{w}%" for w in query_words]
         
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         cursor = conn.cursor()
-        cursor.execute(f"SELECT filename, labels, content, embedding, id FROM documents WHERE {conditions}", params)
+        cursor.execute(f"SELECT filename, labels, content, embedding, id FROM tb_docs_{active_domain} WHERE {conditions}", params)
         rows_db = cursor.fetchall()
         conn.close()
         
@@ -1161,15 +1168,15 @@ def ingest_file():
         vector_json = json.dumps(doc_vector.tolist())
         
         # INSERT KE DB
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         c = conn.cursor()
         try:
-            c.execute("INSERT INTO documents (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
+            c.execute(f"INSERT INTO tb_docs_{active_domain} (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
                       (filename, content, labels_json, vector_json))
             conn.commit()
         except sqlite3.IntegrityError:
             # Jika filename sudah ada, kita update saja
-            c.execute("UPDATE documents SET content=?, labels=?, embedding=? WHERE filename=?",
+            c.execute(f"UPDATE tb_docs_{active_domain} SET content=?, labels=?, embedding=? WHERE filename=?",
                       (content, labels_json, vector_json, filename))
             conn.commit()
         conn.close()
@@ -1192,14 +1199,14 @@ def get_labels():
     global TAXONOMY
     all_labels = set(TAXONOMY.get("Layer_1_Domain", []) + TAXONOMY.get("Layer_2_Detail", []))
     
-    conn = sqlite3.connect(get_active_db_path(), timeout=15)
+    conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
     c = conn.cursor()
     
     # 1 Putaran Kueri untuk Agregasi Massal C-Engine
-    c.execute("""
-        SELECT json_each.value, COUNT(documents.id) 
-        FROM documents, json_each(documents.labels) 
-        WHERE documents.labels IS NOT NULL AND documents.labels != '[]'
+    c.execute(f"""
+        SELECT json_each.value, COUNT(tb_docs_{active_domain}.id) 
+        FROM tb_docs_{active_domain}, json_each(tb_docs_{active_domain}.labels) 
+        WHERE tb_docs_{active_domain}.labels IS NOT NULL AND tb_docs_{active_domain}.labels != '[]'
         GROUP BY json_each.value
     """)
     db_counts = dict(c.fetchall())
@@ -1224,14 +1231,14 @@ def edit_label():
         return jsonify({"status": "error", "message": "Nama label tidak boleh kosong"})
         
     try:
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         c = conn.cursor()
         # [BIG DATA DOCTRINE - TEORI #7: Existential Short-Circuiting]
-        c.execute("""
+        c.execute(f"""
             SELECT id, labels 
-            FROM documents 
+            FROM tb_docs_{active_domain} 
             WHERE EXISTS (
-                SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?
+                SELECT 1 FROM json_each(tb_docs_{active_domain}.labels) WHERE json_each.value = ?
             )
         """, (old_name,))
         rows = c.fetchall()
@@ -1242,7 +1249,7 @@ def edit_label():
                 labels = json.loads(labels_str)
                 if old_name in labels:
                     new_labels = [new_name if l == old_name else l for l in labels]
-                    c.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(new_labels), doc_id))
+                    c.execute(f"UPDATE tb_docs_{active_domain} SET labels = ? WHERE id = ?", (json.dumps(new_labels), doc_id))
                     updated += 1
                     
         conn.commit()
@@ -1269,14 +1276,14 @@ def delete_label():
         return jsonify({"status": "error", "message": "Nama label kosong"})
         
     try:
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         c = conn.cursor()
         # [BIG DATA DOCTRINE - TEORI #7: Existential Short-Circuiting]
-        c.execute("""
+        c.execute(f"""
             SELECT id, labels 
-            FROM documents 
+            FROM tb_docs_{active_domain} 
             WHERE EXISTS (
-                SELECT 1 FROM json_each(documents.labels) WHERE json_each.value = ?
+                SELECT 1 FROM json_each(tb_docs_{active_domain}.labels) WHERE json_each.value = ?
             )
         """, (lbl_to_delete,))
         rows = c.fetchall()
@@ -1287,7 +1294,7 @@ def delete_label():
                 labels = json.loads(labels_str)
                 if lbl_to_delete in labels:
                     new_labels = [l for l in labels if l != lbl_to_delete]
-                    c.execute("UPDATE documents SET labels = ? WHERE id = ?", (json.dumps(new_labels), doc_id))
+                    c.execute(f"UPDATE tb_docs_{active_domain} SET labels = ? WHERE id = ?", (json.dumps(new_labels), doc_id))
                     updated += 1
                     
         conn.commit()
@@ -1340,11 +1347,11 @@ def generate_taxonomy():
         
         active_db_type = get_active_db_type()
         
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         cursor = conn.cursor()
         # [BIG DATA DOCTRINE - MEMORY SAFE FIRST]
         # Hanya tarik ID dan Embedding. Abaikan 'content' (Teks 30K dokumen = 1GB+ RAM)
-        cursor.execute("SELECT id, embedding FROM documents")
+        cursor.execute(f"SELECT id, embedding FROM tb_docs_{active_domain}")
         rows = cursor.fetchall()
         
         N = len(rows)
@@ -1373,10 +1380,10 @@ def generate_taxonomy():
             ids.append(doc_id)
             if emb_str is None or len(json.loads(emb_str)) != 384:
                 # Fallback: tarik content HANYA jika embedding rusak/kosong
-                cursor.execute("SELECT content FROM documents WHERE id = ?", (doc_id,))
+                cursor.execute(f"SELECT content FROM tb_docs_{active_domain} WHERE id = ?", (doc_id,))
                 c_content = cursor.fetchone()[0]
                 emb = get_onnx_embedding(c_content)
-                cursor.execute("UPDATE documents SET embedding = ? WHERE id = ?", (json.dumps(emb.tolist()), doc_id))
+                cursor.execute(f"UPDATE tb_docs_{active_domain} SET embedding = ? WHERE id = ?", (json.dumps(emb.tolist()), doc_id))
             else:
                 emb = np.array(json.loads(emb_str), dtype=np.float32)
                 
@@ -1417,7 +1424,7 @@ def generate_taxonomy():
             sampled_ids = [ids[idx] for idx in sampled_indices]
             
             placeholders = ','.join('?' * len(sampled_ids))
-            cursor.execute(f"SELECT content FROM documents WHERE id IN ({placeholders})", sampled_ids)
+            cursor.execute(f"SELECT content FROM tb_docs_{active_domain} WHERE id IN ({placeholders})", sampled_ids)
             sample_contents = [r[0] for r in cursor.fetchall()]
             
             try:
@@ -1511,7 +1518,7 @@ def generate_taxonomy():
                 overlap_count += 1
                 
             labels_json = json.dumps(list(set(assigned_labels)))
-            cursor.execute("UPDATE documents SET labels = ? WHERE id = ?", (labels_json, doc_id))
+            cursor.execute(f"UPDATE tb_docs_{active_domain} SET labels = ? WHERE id = ?", (labels_json, doc_id))
             
             if (idx + 1) % 500 == 0:
                 conn.commit() # [BATCH COMMIT] Mencegah penumpukan journal file SQLite (Disk I/O Error)
@@ -1548,7 +1555,7 @@ def generate_taxonomy():
 @app.route("/api/reset_db", methods=["POST"])
 def reset_database():
     try:
-        if active_db_path == DB_REAL_PATH:
+        if MASTER_DB_PATH == DB_REAL_PATH:
             # Regenerate using real dataset generator
             import importlib
             import generate_real_demo
@@ -1581,9 +1588,9 @@ def reset_database():
 @app.route("/api/documents/wipe", methods=["POST"])
 def wipe_database():
     try:
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         c = conn.cursor()
-        c.execute("DELETE FROM documents")
+        c.execute(f"DELETE FROM tb_docs_{active_domain}")
         conn.commit()
         conn.close()
         return jsonify({"status": "success", "message": "Seluruh data berhasil dihapus dari pangkalan data aktif."})
@@ -1601,7 +1608,7 @@ def batch_upload():
         if not files:
             return jsonify({"status": "error", "message": "Daftar file kosong"})
             
-        conn = sqlite3.connect(get_active_db_path(), timeout=15)
+        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
         c = conn.cursor()
         
         success_count = 0
@@ -1614,7 +1621,7 @@ def batch_upload():
             if content:
                 try:
                     emb = get_onnx_embedding(content)
-                    c.execute("INSERT INTO documents (filename, content, labels, embedding) VALUES (?, ?, ?, ?)", 
+                    c.execute(f"INSERT INTO tb_docs_{active_domain} (filename, content, labels, embedding) VALUES (?, ?, ?, ?)", 
                               (filename, content, json.dumps([]), json.dumps(emb.tolist())))
                     success_count += 1
                 except sqlite3.IntegrityError:

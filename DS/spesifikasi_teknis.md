@@ -10,7 +10,7 @@ Dokumen ini memuat justifikasi teoretis berbasis bukti (*evidence-based*) mengen
 Kami menetapkan **`paraphrase-multilingual-MiniLM-L12-v2`** (Sentence-Transformers) sebagai model dasar pembelajaran. Pemilihan ini didasarkan pada argumen teoretis dan praktis berikut (yang memicu transisi dari model indobert-mini sebelumnya):
 
 * **Ketahanan Semantik Multilingual & Latensi Rendah (Kebutuhan TKT 4):**
-  Model ini dirancang khusus untuk pencocokan makna (*Semantic Textual Similarity*) dan mendukung lebih dari 50 bahasa, termasuk Bahasa Indonesia. Model ini sangat tangguh terhadap typo atau penggunaan sinonim. Meskipun memiliki kemampuan SOTA (*State-of-the-Art*), proses ekspor ke format **ONNX** menghasilkan arsitektur yang ringan dan efisien untuk dijalankan di CPU lokal kampus secara offline pada tahap STKI (TKT 4).
+  Model ini dirancang khusus untuk pencocokan makna (*Semantic Textual Similarity*) dan mendukung lebih dari 50 bahasa, termasuk Bahasa Indonesia. Model ini sangat tangguh terhadap typo atau penggunaan sinonim. Meskipun memiliki performa klasifikasi tingkat tinggi, proses ekspor ke format **ONNX** menghasilkan arsitektur yang ringan dan efisien untuk dijalankan di CPU lokal kampus secara offline pada tahap STKI (TKT 4).
 * **Dual-Utility (Klasifikasi & Representasi Vektor):**
   Selain bertindak sebagai classifier multi-label, model ini mampu mengekstrak *pooled embeddings* (vektor berdimensi 384 melalui *Mean Pooling*) dari lapisan tersembunyinya. Vektor representasi semantik ini sangat kaya akan makna kontekstual yang digunakan untuk mengaktifkan fitur pencarian semantik (STKI) dan klasifikasi dinamis.
 
