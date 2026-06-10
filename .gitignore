@@ -18,6 +18,7 @@ _doctrine/
 # Agen dan Testing
 .agents/
 testing/
+_Quality_Assurance/
 _debug_read.py
 seed_output.log
 TKI/seed_alkitab.py
