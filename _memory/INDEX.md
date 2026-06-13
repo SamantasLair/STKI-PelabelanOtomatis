@@ -2,7 +2,7 @@
 
 ## 1. Arsitektur Proyek
 - **_Presentasi/**: Node presentasi graf L1-L2-L3 (Topologi: [[L1_STKI_CORE]] & [[L1_DATA_SCIENCE]]). Dilengkapi juga dengan dokumen pertahanan arsitektural seperti [[L3_PRACTICE_JSON_ETL]] dan [[L3_PRACTICE_POLYMORPHIC_DB]].
-- **TKI/ & STKI/**: Sistem utama (Flask Web/GUI Desktop) hibrida (Dense MiniLM + BM25 Sparse).
+- **TKI/ & STKI/**: Sistem utama (Flask Web/GUI Desktop) hibrida (Dense MiniLM + BM25 Sparse). Kajian dan evaluasi mendalam atas 3 kapabilitas intinya terdapat di [[analisis_arsitektur_3_fungsi_stki]].
 - **_UIUX/stki/**: Ruang Pencarian End-User. Memiliki fitur Pencarian Hibrida, Ingesti Berkas, dan Rekomendasi Terkait (Berbasis Teks & File).
 - **_UIUX/ds/**: Command Center Data Science. Memiliki grafik alur data interaktif (*Node Pipeline*), Database Explorer bergaya *Accordion*, dan panel generasi Taksonomi K-Means. Desain berlandaskan [[teori_uiux_neobrutalism]].
 - **DS/**: Ruang Data Science (Notebook MLOps & eksperimen). Spesifikasi teknis berada di [[spesifikasi_teknis]].

@@ -184,3 +184,315 @@ Traceback (most recent call last):
     cursor.execute("SELECT id, content, embedding FROM documents")
 sqlite3.OperationalError: no such column: embedding
 
+[2026-06-10 00:13:24] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1113, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1078, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 00:13:25] [SYSTEM: Ingestion API] ERROR: Gagal memproses file empty.csv: name 'get_MASTER_DB_PATH' is not defined
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1171, in ingest_file
+    conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+                           ^^^^^^^^^^^^^^^^^^
+NameError: name 'get_MASTER_DB_PATH' is not defined
+
+[2026-06-10 00:14:42] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1113, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1078, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 00:16:13] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1112, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1077, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 06:58:03] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1112, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1077, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 06:59:21] [SYSTEM: Search API] ERROR: Gagal mengeksekusi pencarian: name 'active_db_type' is not defined
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 843, in search
+    embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 843, in <listcomp>
+    embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 102, in get_db_embedding
+    cache_key = (active_db_type, doc_id)
+                 ^^^^^^^^^^^^^^
+NameError: name 'active_db_type' is not defined
+
+[2026-06-10 06:59:22] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1112, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1077, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 06:59:35] [SYSTEM: Search API] ERROR: Gagal mengeksekusi pencarian: name 'active_db_type' is not defined
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 843, in search
+    embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 843, in <listcomp>
+    embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 102, in get_db_embedding
+    cache_key = (active_db_type, doc_id)
+                 ^^^^^^^^^^^^^^
+NameError: name 'active_db_type' is not defined
+
+[2026-06-10 07:00:52] [SYSTEM: Search API] ERROR: Gagal mengeksekusi pencarian: name 'active_db_type' is not defined
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 843, in search
+    embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 843, in <listcomp>
+    embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 102, in get_db_embedding
+    cache_key = (active_db_type, doc_id)
+                 ^^^^^^^^^^^^^^
+NameError: name 'active_db_type' is not defined
+
+[2026-06-10 07:00:52] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1112, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1077, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 07:01:05] [SYSTEM: Search API] ERROR: Gagal mengeksekusi pencarian: name 'active_db_type' is not defined
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 843, in search
+    embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 843, in <listcomp>
+    embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 102, in get_db_embedding
+    cache_key = (active_db_type, doc_id)
+                 ^^^^^^^^^^^^^^
+NameError: name 'active_db_type' is not defined
+
+[2026-06-10 07:02:25] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1112, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1077, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 07:02:49] [SYSTEM: Ingestion API] ERROR: Gagal memproses file ../../../etc/passwd: database is locked
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1173, in ingest_file
+    c.execute(f"INSERT INTO tb_docs_{active_domain} (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
+sqlite3.OperationalError: database is locked
+
+[2026-06-10 07:03:26] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1112, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1077, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 07:03:49] [SYSTEM: Ingestion API] ERROR: Gagal memproses file ../../../etc/passwd: database is locked
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1173, in ingest_file
+    c.execute(f"INSERT INTO tb_docs_{active_domain} (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
+sqlite3.OperationalError: database is locked
+
+[2026-06-10 09:54:09] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1112, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1077, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-10 09:54:29] [SYSTEM: Ingestion API] ERROR: Gagal memproses file ../../../etc/passwd: database is locked
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1173, in ingest_file
+    c.execute(f"INSERT INTO tb_docs_{active_domain} (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
+sqlite3.OperationalError: database is locked
+
+[2026-06-11 06:35:00] [SYSTEM: Ingestion API] ERROR: Gagal memproses file fake.pdf: Stream has ended unexpectedly
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1112, in ingest_file
+    content = extract_text_from_file_object(file, filename)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1077, in extract_text_from_file_object
+    reader = pypdf.PdfReader(pdf_file)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 149, in __init__
+    self._initialize_stream(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 171, in _initialize_stream
+    self.read(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 661, in read
+    self._find_eof_marker(stream)
+  File "C:\Python311\Lib\site-packages\pypdf\_reader.py", line 767, in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python311\Lib\site-packages\pypdf\_utils.py", line 330, in read_previous_line
+    raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+[2026-06-11 06:35:19] [SYSTEM: Ingestion API] ERROR: Gagal memproses file ../../../etc/passwd: database is locked
+TRACE:
+Traceback (most recent call last):
+  File "C:\laragon\www\_NotWeb\_TemuKembaliInformasi\UAS\TKI\app_web.py", line 1173, in ingest_file
+    c.execute(f"INSERT INTO tb_docs_{active_domain} (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
+sqlite3.OperationalError: database is locked
+

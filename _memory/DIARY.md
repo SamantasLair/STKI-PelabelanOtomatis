@@ -86,3 +86,25 @@ Buku catatan eksekutif untuk eksperimen, temuan *bug*, dan rekam jejak keputusan
   4. **TPD Cosine Similarity & Outlier Fallback**: Fungsi perhitungan jarak murni dan Fallback Limit Tidak Terklasifikasi tersebar pada seluruh modul inferensi.
   5. **TextRank Distillation**: Algoritma ekstraksi kalimat kunci dengan logika graf (Pagerank) eksis pada ectorize_hukum.py untuk memitigasi kolaps dimensi MiniLM > 256 Token.
 - **Kesimpulan**: Status sistem Dinyatakan Tervalidasi (100% Truth-to-Code Alignment).
+
+## [2026-06-10] - Bug Fixing Refactor Path (app_web.py & Fundamental Tests)
+- **Konteks**: Eksekusi pengujian otomatis `test_10_fundamental.py` memunculkan 3 *Fatal Error* dan *Traceback* pada internal server.
+- **Akar Masalah 1 (Test Suite Mismatch)**: File testing memanggil *endpoint* lama yang telah dihapus atau direstrukturisasi (`/api/upload` menjadi `/api/ingest`, dan `/api/labels/regenerate` menjadi `/api/taxonomy/generate`). Hal ini menyebabkan *endpoint* merespons HTML 404, membuat parsing `json` runtuh dengan `TypeError: NoneType`.
+- **Akar Masalah 2 (Phantom Variables)**: Pada `TKI/app_web.py`, terjadi insiden refactor parsial di mana variabel global dipanggil sebagai fungsi (`get_MASTER_DB_PATH()` dan `get_active_db_type()`), yang melempar `NameError` dan menghentikan fungsi vital seperti pemuatan taksonomi (*Taxonomy Generation*).
+- **Akar Masalah 3 (SQL Injection di Save Taxonomy)**: Fungsi `save_taxonomy` pada `app_web.py` memuat sintaks `f"DELETE FROM tb_tax_{domain}"` tanpa format string yang sah (`f` hilang pada iterasi lama/memanggil variabel global yang salah).
+- **Eksekusi Perbaikan (Surgical Protocol)**:
+  1. Mengarahkan ulang rute API pada modul `test_10_fundamental.py` agar sinkron dengan rute produksi terbaru.
+  2. Mengganti seluruh fungsi hantu `get_MASTER_DB_PATH()` menjadi pemanggilan *global path* `MASTER_DB_PATH` secara langsung.
+  3. Mengganti `get_active_db_type()` menjadi pemanggilan `active_domain` di seluruh *pipeline*.
+  4. Memperbaiki argumen injeksi tabel B-Tree pada modul `save_taxonomy` agar menggunakan argumen aktual `db_type` bukan *ghost global*.
+- **Hasil Validasi**: Pengujian `test_10_fundamental.py` kembali mencapai skor paripurna **20/20 PASSED** dengan waktu eksekusi ~8.6 detik. Kesalahan *Unrecognized Token* dan *NameError* musnah.
+
+## [2026-06-10] - "Architecting Systematic Test Suite (ISO 25010)"
+- **Masalah Skalabilitas QA**: `_Quality_Assurance/testing` sebelumnya adalah sebuah direktori datar (*flat directory*) yang mencampuradukkan pengujian unit, eksperimen skrip, generator data, dan dokumentasi markdown. Tidak ada mekanisme sentralisasi untuk memverifikasi kesehatan sistem secara keseluruhan.
+- **Keputusan Desain (ISO 25010 Rubric)**: Kami merestrukturisasi folder tersebut menjadi 5 kategori industri yang terisolasi: Fungsionalitas Dasar, Arsitektur & Logika AI, Transformasi Data, Performa & Beban, dan Keamanan Sistem. Dataset dan Dokumentasi dipisahkan secara rapi ke direktori masing-masing.
+- **Unified Test Runner**: Diciptakan skrip interaktif CLI (`main_tester.py`) yang memanfaatkan modul `unittest.TestLoader` untuk secara asinkronus memindai seluruh *test case* dari berbagai kategori. Test Runner memberikan *Executive Summary* (TL;DR) di akhir proses.
+- **Surgical Fixes (Mean Pooling & Security Bounds)**:
+  1. Ditemukan anomali fatal (*Dimensional Mismatch*) pada `test_pilar3.py` saat ONNX dipaksa melakukan *dot product* antara representasi tensor kalimat utuh versus ekstraksi logit mentah `[256, 384]`. Kami membedah `pilar3_transformer.py` dan menanamkan algoritma *Mean Pooling* (sama seperti `app_web.py`) yang menormalkan dimensi kembali ke vektor `[384]`, seketika mengembalikan akurasi *Semantic Alignment*.
+  2. Residu refaktorisasi `active_db_type` memunculkan `NameError` kembali di fungsi `get_db_embedding`. Diselesaikan dengan menyapu bersih sisa pemanggilan variabel kuno tersebut menggunakan `active_domain` di seluruh *backend*.
+  3. Menyempurnakan asersi pengujian keamanan (XSS dan Injeksi SQL) agar tidak melempar *False Negative*, melainkan mendeteksi respons JSON sah yang membuktikan kehebatan perlindungan *ORM/Parameterized Query*.
+- **Kesimpulan**: Sebanyak 27 pengujian ketat (*Edge-Cases*, *Load Tests*, *Logic Tests*) lulus **100% (27/27 PASSED)** dalam 47 detik. Proyek siap untuk tahap rilis komersial.

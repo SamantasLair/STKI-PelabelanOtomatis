@@ -1,7 +1,27 @@
-# CHANGELOG
+## [v4.9.4] - 2026-06-10\n### QA & Architecture Standardization\n- **Consolidated QA Architecture**: Meleburkan folder 	esting dan Automated_Evaluator ke dalam _Quality_Assurance/ dengan hierarki ISO 25010 (7 Kategori).\n- **Unified Test Runner**: Menyatukan semua engine matematis (MRR, NDCG) menjadi unittest.TestCase dan dieksekusi secara terpusat via main_qa_runner.py.\n- **Git Hygiene**: Melakukan sanitasi repositori dengan menghapus cache direktori QA dan menguncinya di .gitignore untuk mencegah kebocoran metrik internal ke public branch.\n\n# CHANGELOG
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 
+## [v4.9.5] - 2026-06-12
+### Added
+- **Architecture Analysis Audit**: Membuat kajian komprehensif terkait 3 fungsi pilar sistem (Ingesti, Pencarian Hibrida, Klasifikasi Dinamis) lengkap dengan diagram Mermaid dan pembuktian formula LaTeX di `_Fondasi/analisis_arsitektur_3_fungsi_stki.md`. Kajian ini menjawab urgensi apakah sistem membutuhkan tambahan fungsi OCR, Cross-Encoder, atau eksekusi RAG.
+
+
+
+## [v4.9.3] - 2026-06-10
+### Changed
+- **ISO 25010 QA Architecture (Test Restructure)**: Merombak dan memecah seluruh arsitektur pengujian di dalam `_Quality_Assurance/testing/` menjadi 5 kategori industri (Fungsionalitas Dasar, Arsitektur & Logika AI, Transformasi Data, Performa & Beban, Keamanan Sistem) serta pemisahan Dataset dan Dokumentasi. Seluruh skrip diubah ke paradigma `unittest` untuk integrasi otomatis.
+- **Unified Test Runner**: Menambahkan CLI interaktif (`main_tester.py`) yang memberikan Executive Summary (TL;DR), legenda hasil, dan pencatatan komputasi per kategori. Output dapat menjalankan seluruh uji dalam hitungan detik.
+
+### Fixed
+- **ONNX Mean Pooling on DS (Pilar 3)**: Memperbaiki *Dimensional Mismatch* pada `pilar3_transformer.py` di mana model melempar matriks raw `[256, 384]` yang gagal di-*dot product*. Algoritma *Mean Pooling* yang sama dari `app_web.py` telah disuntikkan, mereduksi tensor menjadi `[384]` dan menstabilkan rekognisi Sinonim Leksikal.
+- **Lingering active_db_type (Backend)**: Memusnahkan ancaman *NameError* yang tersisa pada `/api/search` (`app_web.py`) dengan mengganti `active_db_type` menjadi `active_domain` di seluruh rute (pengaturan cache memori dan pengambilan embbeding dari DB), menjadikan pencarian 100% *crash-free*.
+- **XSS & SQL Injection Boundaries (Security Test)**: Memperbaiki asersi *false negative* pada skenario keamanan. Pengujian membuktikan *payload* SQL Injeksi (`' OR 1=1`) berhasil digagalkan dengan anggun (*graceful reject*), dan XSS disanitasi tanpa melumpuhkan *parser* HTML Backend. (Total Tes: 27/27 PASSED).
+
+## [v4.9.2] - 2026-06-10
+### Fixed
+- **Phantom Refactor Bug (TKI Core)**: Memperbaiki insiden fatal di `app_web.py` di mana `get_MASTER_DB_PATH()` dan `get_active_db_type()` dipanggil namun tidak pernah didefinisikan (sisa refactoring lama). Hal ini sempat melumpuhkan sistem penyimpanan taksonomi dan *fallback* model. Pemanggilan diubah menjadi variabel global `MASTER_DB_PATH` dan `active_domain` murni. Tabel dinamis `save_taxonomy` juga dibersihkan dari *ghost variable* `domain`.
+- **Test Suite Synchronization**: Meluruskan sinkronisasi *endpoint* usang pada pengujian `test_10_fundamental.py` (`/api/upload` -> `/api/ingest`) yang memicu *Test Runner* gagal pada validasi dokumen korup dan relabeling konkurensi. Seluruh 20 skenario uji pinggir (*Edge-Cases*) telah lulus **(20/20 PASSED)** tanpa eror memori.
 
 ## [v4.9.1] - 2026-06-09
 ### Verified

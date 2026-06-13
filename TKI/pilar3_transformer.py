@@ -10,7 +10,7 @@ from transformers import AutoTokenizer
 
 def init_stki_engine():
     # Load Model ONNX dan Tokenizer (menggunakan model IndoBERT)
-    model_path = "STKI/onnx_model/multi_label_model.onnx"
+    model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'STKI', 'onnx_model', 'multi_label_model.onnx'))
     tokenizer = AutoTokenizer.from_pretrained("indobenchmark/indobert-base-p1")
     session = ort.InferenceSession(model_path)
     return tokenizer, session
@@ -22,7 +22,14 @@ def get_onnx_embedding(text, tokenizer, session):
         "attention_mask": inputs["attention_mask"].astype(np.int64)
     }
     logits = session.run(None, ort_inputs)[0]
-    return logits[0]
+    
+    last_hidden_state = logits
+    attention_mask_expanded = np.expand_dims(inputs["attention_mask"], axis=-1)
+    sum_embeddings = np.sum(last_hidden_state * attention_mask_expanded, axis=1)
+    sum_mask = np.clip(np.sum(attention_mask_expanded, axis=1), a_min=1e-9, a_max=None)
+    sentence_embedding = (sum_embeddings / sum_mask)[0]
+    
+    return sentence_embedding
 
 def stki_pseudo_relevance_feedback_robust(df, tokenizer, session):
     """

@@ -2,6 +2,7 @@ import os
 import sys
 import re
 import sqlite3
+from TKI.database import DBConnection, execute_query
 import json
 import numpy as np
 import pandas as pd
@@ -33,7 +34,7 @@ def get_available_domains():
     master_path = os.path.join(DB_DIR, "stki_master.db")
     if os.path.exists(master_path):
         try:
-            conn = sqlite3.connect(master_path)
+            conn = DBConnection(master_path)
             c = conn.cursor()
             c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'tb_docs_%'")
             for row in c.fetchall():
@@ -99,7 +100,7 @@ def sync_global_db_state():
         DB_EMBEDDING_CACHE = {}
 
 def get_db_embedding(active_domain, doc_id, emb_str):
-    cache_key = (active_db_type, doc_id)
+    cache_key = (active_domain, doc_id)
     if cache_key not in DB_EMBEDDING_CACHE:
         DB_EMBEDDING_CACHE[cache_key] = np.array(json.loads(emb_str))
     return DB_EMBEDDING_CACHE[cache_key]
@@ -107,7 +108,7 @@ def get_db_embedding(active_domain, doc_id, emb_str):
 def load_taxonomy(domain):
     tax = {"Layer_1_Domain": [], "Layer_2_Detail": [], "threshold_l1": 0.50, "threshold_l2": 0.55}
     try:
-        conn = sqlite3.connect(MASTER_DB_PATH, timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         c.execute(f"CREATE TABLE IF NOT EXISTS tb_tax_{domain} (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
         c.execute(f"CREATE TABLE IF NOT EXISTS tb_set_{domain} (key TEXT PRIMARY KEY, value TEXT)")
@@ -133,7 +134,7 @@ def load_taxonomy(domain):
 
 def save_setting(db_path, key, value):
     try:
-        conn = sqlite3.connect(db_path, timeout=15)
+        conn = DBConnection(db_path, timeout=15)
         c = conn.cursor()
         c.execute(f"CREATE TABLE IF NOT EXISTS tb_set_{domain} (key TEXT PRIMARY KEY, value TEXT)")
         c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
@@ -145,22 +146,21 @@ def save_setting(db_path, key, value):
         print(f"Error saving setting: {e}")
 
 def save_taxonomy(db_type, taxonomy_dict):
-    db_path = os.path.join(DB_DIR, db_type)
     try:
-        conn = sqlite3.connect(db_path, timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
-        c.execute(f"CREATE TABLE IF NOT EXISTS tb_tax_{domain} (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
-        c.execute("DELETE FROM tb_tax_{domain}")
+        c.execute(f"CREATE TABLE IF NOT EXISTS tb_tax_{db_type} (id INTEGER PRIMARY KEY AUTOINCREMENT, layer TEXT, name TEXT UNIQUE)")
+        c.execute(f"DELETE FROM tb_tax_{db_type}")
         
         for l1 in taxonomy_dict.get("Layer_1_Domain", []):
             try:
-                c.execute(f"INSERT INTO tb_tax_{active_domain} (layer, name) VALUES (?, ?)", ("Layer_1_Domain", l1))
+                c.execute(f"INSERT INTO tb_tax_{db_type} (layer, name) VALUES (?, ?)", ("Layer_1_Domain", l1))
             except sqlite3.IntegrityError:
                 pass
                 
         for l2 in taxonomy_dict.get("Layer_2_Detail", []):
             try:
-                c.execute(f"INSERT INTO tb_tax_{active_domain} (layer, name) VALUES (?, ?)", ("Layer_2_Detail", l2))
+                c.execute(f"INSERT INTO tb_tax_{db_type} (layer, name) VALUES (?, ?)", ("Layer_2_Detail", l2))
             except sqlite3.IntegrityError:
                 pass
                 
@@ -169,7 +169,7 @@ def save_taxonomy(db_type, taxonomy_dict):
     except Exception as e:
         print(f"Error saving taxonomy DB: {e}")
 
-TAXONOMY = load_taxonomy(MASTER_DB_PATH)
+TAXONOMY = load_taxonomy(active_domain)
 
 import datetime
 import traceback
@@ -343,7 +343,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
     global relabel_progress
     try:
         relabel_progress["status"] = "running"
-        conn = sqlite3.connect(db_path, timeout=15)
+        conn = DBConnection(db_path, timeout=15)
         cursor = conn.cursor()
         cursor.execute(f"SELECT id, content FROM tb_docs_{active_domain}")
         rows = cursor.fetchall()
@@ -480,7 +480,7 @@ def get_documents():
         limit = int(request.args.get('limit', 50))
         filter_type = request.args.get('filter', 'all')
         
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         cursor = conn.cursor()
         
         import time
@@ -577,11 +577,11 @@ def get_documents():
 
 @app.route("/api/status", methods=["GET"])
 def get_status():
-    global active_db_type, MASTER_DB_PATH, TAXONOMY
+    global active_domain, MASTER_DB_PATH, TAXONOMY
     
     # Buat DB jika belum ada
     if not os.path.exists(MASTER_DB_PATH):
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         c.execute('''
             CREATE TABLE IF NOT EXISTS documents (
@@ -595,7 +595,7 @@ def get_status():
         conn.commit()
         conn.close()
         
-    conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+    conn = DBConnection(MASTER_DB_PATH, timeout=15)
     c = conn.cursor()
     c.execute(f"SELECT COUNT(*) FROM tb_docs_{active_domain}")
     total_docs = c.fetchone()[0]
@@ -680,7 +680,7 @@ def rename_ledger():
         return jsonify({"status": "error", "message": "Nama domain baru sudah digunakan."})
         
     try:
-        conn = sqlite3.connect(MASTER_DB_PATH)
+        conn = DBConnection(MASTER_DB_PATH)
         c = conn.cursor()
         c.execute(f"ALTER TABLE tb_docs_{old_name} RENAME TO tb_docs_{new_name}")
         c.execute(f"ALTER TABLE tb_tax_{old_name} RENAME TO tb_tax_{new_name}")
@@ -705,7 +705,7 @@ def delete_ledger():
         return jsonify({"status": "error", "message": "Domain tidak ditemukan."})
         
     try:
-        conn = sqlite3.connect(MASTER_DB_PATH)
+        conn = DBConnection(MASTER_DB_PATH)
         c = conn.cursor()
         c.execute(f"DROP TABLE IF EXISTS tb_docs_{target}")
         c.execute(f"DROP TABLE IF EXISTS tb_tax_{target}")
@@ -744,14 +744,14 @@ def add_taxonomy_label():
         name = data.get("name")
         if not layer or not name: return jsonify({"error": "Missing layer or name"})
         
-        conn = sqlite3.connect(MASTER_DB_PATH, timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         c.execute(f"INSERT INTO tb_tax_{active_domain} (layer, name) VALUES (?, ?)", (layer, name))
         conn.commit()
         conn.close()
         
         global TAXONOMY
-        TAXONOMY = load_taxonomy(MASTER_DB_PATH)
+        TAXONOMY = load_taxonomy(active_domain)
         return jsonify({"status": "success", "taxonomy": TAXONOMY})
     except sqlite3.IntegrityError:
         return jsonify({"error": "Label sudah ada."})
@@ -769,14 +769,14 @@ def edit_taxonomy_label():
         if not old_name or not new_name or not layer: 
             return jsonify({"error": "Invalid data"})
             
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         c.execute(f"UPDATE tb_tax_{active_domain} SET name=? WHERE layer=? AND name=?", (new_name, layer, old_name))
         conn.commit()
         conn.close()
         
         global TAXONOMY
-        TAXONOMY = load_taxonomy(MASTER_DB_PATH)
+        TAXONOMY = load_taxonomy(active_domain)
         
         threading.Thread(target=async_relabel_task, args=(MASTER_DB_PATH, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"])).start()
         
@@ -793,14 +793,14 @@ def delete_taxonomy_label():
         name = data.get("name")
         layer = data.get("layer")
         
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         c.execute("DELETE FROM tb_tax_{domain} WHERE layer=? AND name=?", (layer, name))
         conn.commit()
         conn.close()
         
         global TAXONOMY
-        TAXONOMY = load_taxonomy(MASTER_DB_PATH)
+        TAXONOMY = load_taxonomy(active_domain)
         
         threading.Thread(target=async_relabel_task, args=(MASTER_DB_PATH, TAXONOMY["Layer_1_Domain"], TAXONOMY["Layer_2_Detail"])).start()
         
@@ -821,7 +821,7 @@ def search():
         # CORE_ENG: Semantic Vectorization via Dense MiniLM-L12 (ONNX)
         doc_vector = get_onnx_embedding(query)
         
-        conn = sqlite3.connect(MASTER_DB_PATH, timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         cursor = conn.cursor()
         
         query_words = query.lower().split()
@@ -918,7 +918,7 @@ def recommend():
         conditions = " OR ".join(["content LIKE ?" for _ in query_words])
         params = [f"%{w}%" for w in query_words]
         
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         cursor = conn.cursor()
         cursor.execute(f"SELECT filename, labels, content, embedding, id FROM tb_docs_{active_domain} WHERE {conditions}", params)
         rows_db = cursor.fetchall()
@@ -929,7 +929,7 @@ def recommend():
             
         corpus = [row[2] for row in rows_db]
         filenames = [row[0] for row in rows_db]
-        embeddings = [get_db_embedding(active_db_type, row[4], row[3]) for row in rows_db]
+        embeddings = [get_db_embedding(active_domain, row[4], row[3]) for row in rows_db]
         
         bm25 = BM25(corpus)
         norm_bm25_scores = [1.0 - np.exp(-0.2 * bm25.get_score(query_words, i)) for i in range(len(corpus))]
@@ -1168,7 +1168,7 @@ def ingest_file():
         vector_json = json.dumps(doc_vector.tolist())
         
         # INSERT KE DB
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         try:
             c.execute(f"INSERT INTO tb_docs_{active_domain} (filename, content, labels, embedding) VALUES (?, ?, ?, ?)",
@@ -1199,7 +1199,7 @@ def get_labels():
     global TAXONOMY
     all_labels = set(TAXONOMY.get("Layer_1_Domain", []) + TAXONOMY.get("Layer_2_Detail", []))
     
-    conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+    conn = DBConnection(MASTER_DB_PATH, timeout=15)
     c = conn.cursor()
     
     # 1 Putaran Kueri untuk Agregasi Massal C-Engine
@@ -1231,7 +1231,7 @@ def edit_label():
         return jsonify({"status": "error", "message": "Nama label tidak boleh kosong"})
         
     try:
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         # [BIG DATA DOCTRINE - TEORI #7: Existential Short-Circuiting]
         c.execute(f"""
@@ -1276,7 +1276,7 @@ def delete_label():
         return jsonify({"status": "error", "message": "Nama label kosong"})
         
     try:
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         # [BIG DATA DOCTRINE - TEORI #7: Existential Short-Circuiting]
         c.execute(f"""
@@ -1345,9 +1345,9 @@ def generate_taxonomy():
         threshold_l1 = float(data_req.get("threshold_l1", 0.50))
         threshold_l2 = float(data_req.get("threshold_l2", 0.55))
         
-        active_db_type = get_active_db_type()
+        active_domain = active_domain
         
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         cursor = conn.cursor()
         # [BIG DATA DOCTRINE - MEMORY SAFE FIRST]
         # Hanya tarik ID dan Embedding. Abaikan 'content' (Teks 30K dokumen = 1GB+ RAM)
@@ -1478,7 +1478,7 @@ def generate_taxonomy():
         TAXONOMY["Layer_2_Detail"] = list(set(layer_2_labels))
         TAXONOMY["threshold_l1"] = threshold_l1
         TAXONOMY["threshold_l2"] = threshold_l2
-        save_taxonomy(active_db_type, TAXONOMY)
+        save_taxonomy(active_domain, TAXONOMY)
         
         # 3. Multi-Label Overlapping Assignment (Thresholding Venn Diagram)
         l2_embs = kmeans_l2.cluster_centers_
@@ -1563,7 +1563,7 @@ def reset_database():
             generate_real_demo.generate_real_dataset()
         else:
             # Reseed default database
-            conn = sqlite3.connect(DB_PATH, timeout=15)
+            conn = DBConnection(DB_PATH, timeout=15)
             c = conn.cursor()
             c.execute("DROP TABLE IF EXISTS documents")
             c.execute("""
@@ -1588,7 +1588,7 @@ def reset_database():
 @app.route("/api/documents/wipe", methods=["POST"])
 def wipe_database():
     try:
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         c.execute(f"DELETE FROM tb_docs_{active_domain}")
         conn.commit()
@@ -1608,7 +1608,7 @@ def batch_upload():
         if not files:
             return jsonify({"status": "error", "message": "Daftar file kosong"})
             
-        conn = sqlite3.connect(get_MASTER_DB_PATH(), timeout=15)
+        conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
         
         success_count = 0
