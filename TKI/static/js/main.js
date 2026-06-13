@@ -29,8 +29,12 @@ function initTabs() {
             desc: 'Kelola taksonomi dinamis, hitung Rice Rule matematika, dan jalankan batch relabeling ONNX.'
         },
         'recommendation-tab': {
-            title: 'Smart Content Recommendation',
-            desc: 'Rekomendasi aset terpisah antara file Data (.csv/.xlsx) dan file Literatur Akademik (.pdf/.docx).'
+            title: 'Smart Recommendation Engine',
+            desc: 'Sistem rekomendasi profil/topik berbasis kedekatan jarak Cosine/Euclidean.'
+        },
+        'looker-tab': {
+            title: 'Looker Studio Business Intelligence',
+            desc: 'Visualisasi analitik Wide Architecture untuk data hukum yang diolah oleh AI K-Means.'
         }
     };
 

@@ -45,3 +45,11 @@ STKI/onnx_model/*.bin
 
 # Penilaian Kriteria
 penilaian_kriteria.md
+
+# File Docs
+*.docx
+LAPORAN_AKHIR_STKI.md
+
+# ETL Pipelines
+ETL_HAKI/
+ETL_Looker/

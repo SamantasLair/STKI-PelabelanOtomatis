@@ -278,11 +278,55 @@
                                 <input type="text" id="looker-url" placeholder="Masukkan URL Embed Google Looker Studio..." style="flex: 1; font-family: var(--font-mono); font-size: 0.85rem;" />
                                 <button class="btn btn-primary" onclick="App.loadLooker()">MUAT DASHBOARD</button>
                             </div>
-                            <div id="looker-container" style="flex: 1; border: 2px dashed var(--color-ink); display: flex; align-items: center; justify-content: center; background: var(--color-paper);">
-                                <div id="looker-placeholder" style="font-family: var(--font-mono); color: var(--color-ink-muted); text-align: center;">
-                                    <div>[IFRAME SLOT FOR LOOKER DASHBOARD]</div>
-                                    <div style="font-size: 0.8rem; margin-top: var(--spacing-sm);">Connects directly to SQLite Multi-Domain</div>
+                            <div id="looker-container" style="flex: 1; border: 2px solid var(--color-ink); display: flex; align-items: center; justify-content: center; background: var(--color-paper); overflow: hidden; position: relative;">
+                                
+                                <!-- Comic Retro Loader -->
+                                <style>
+                                .comic-loader-wrapper {
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    justify-content: center;
+                                    position: absolute;
+                                    top: 0; left: 0; right: 0; bottom: 0;
+                                    background: var(--color-paper);
+                                    z-index: 10;
+                                }
+                                .comic-box {
+                                    width: 50px;
+                                    height: 50px;
+                                    background: var(--color-safe);
+                                    border: 3px solid var(--color-ink);
+                                    box-shadow: 5px 5px 0 var(--color-ink);
+                                    animation: comicFlip 1.5s infinite ease-in-out;
+                                }
+                                @keyframes comicFlip {
+                                    0% { transform: perspective(150px) rotateX(0deg) rotateY(0deg); background: var(--color-safe); }
+                                    50% { transform: perspective(150px) rotateX(-180deg) rotateY(0deg); background: var(--color-danger); box-shadow: -5px 5px 0 var(--color-ink); }
+                                    100% { transform: perspective(150px) rotateX(-180deg) rotateY(-180deg); background: var(--color-warning); box-shadow: 5px 5px 0 var(--color-ink); }
+                                }
+                                .comic-text {
+                                    margin-top: 25px;
+                                    font-family: var(--font-mono);
+                                    font-size: 1.2rem;
+                                    font-weight: bold;
+                                    color: var(--color-ink);
+                                    letter-spacing: 1px;
+                                    animation: comicBlink 0.8s infinite alternate;
+                                }
+                                @keyframes comicBlink {
+                                    0% { opacity: 1; }
+                                    100% { opacity: 0.3; }
+                                }
+                                </style>
+                                
+                                <div id="looker-loader" class="comic-loader-wrapper">
+                                    <div class="comic-box"></div>
+                                    <div class="comic-text">MEMUAT DASHBOARD...</div>
+                                    <div style="font-family: var(--font-mono); font-size: 0.75rem; margin-top: 8px; color: var(--color-ink-muted);">[Menyambungkan ke Google Data Server]</div>
                                 </div>
+
+                                <iframe onload="document.getElementById('looker-loader').style.display='none'" width="100%" height="100%" src="https://datastudio.google.com/embed/reporting/8f0d4607-7245-42f2-b64f-e73a619ab71c/page/6T3qF" frameborder="0" style="border:0; position: relative; z-index: 1;" allowfullscreen sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"></iframe>
                             </div>
                         </div>
                     </div>

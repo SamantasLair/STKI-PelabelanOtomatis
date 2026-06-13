@@ -242,7 +242,7 @@ def extract_key_sentences(text, num_sentences=5):
 @lru_cache(maxsize=2000)
 def get_onnx_embedding(text):
     if session is None or tokenizer is None:
-        return np.zeros(5)
+        return np.zeros(384)
     distilled_text = extract_key_sentences(text, num_sentences=5)
     
     # Encode with tokenizers (fast rust implementation)
@@ -1339,19 +1339,19 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 @app.route("/api/taxonomy/generate", methods=["POST"])
 def generate_taxonomy():
-    global TAXONOMY, DB_EMBEDDING_CACHE, TAXONOMY_PROGRESS
+    global TAXONOMY, DB_EMBEDDING_CACHE, TAXONOMY_PROGRESS, active_domain
     try:
         data_req = request.get_json() or {}
         threshold_l1 = float(data_req.get("threshold_l1", 0.50))
         threshold_l2 = float(data_req.get("threshold_l2", 0.55))
         
-        active_domain = active_domain
+        domain_to_use = data_req.get("domain", active_domain)
         
         conn = DBConnection(MASTER_DB_PATH, timeout=15)
         cursor = conn.cursor()
         # [BIG DATA DOCTRINE - MEMORY SAFE FIRST]
         # Hanya tarik ID dan Embedding. Abaikan 'content' (Teks 30K dokumen = 1GB+ RAM)
-        cursor.execute(f"SELECT id, embedding FROM tb_docs_{active_domain}")
+        cursor.execute(f"SELECT id, embedding FROM tb_docs_{domain_to_use}")
         rows = cursor.fetchall()
         
         N = len(rows)
@@ -1380,10 +1380,10 @@ def generate_taxonomy():
             ids.append(doc_id)
             if emb_str is None or len(json.loads(emb_str)) != 384:
                 # Fallback: tarik content HANYA jika embedding rusak/kosong
-                cursor.execute(f"SELECT content FROM tb_docs_{active_domain} WHERE id = ?", (doc_id,))
+                cursor.execute(f"SELECT content FROM tb_docs_{domain_to_use} WHERE id = ?", (doc_id,))
                 c_content = cursor.fetchone()[0]
                 emb = get_onnx_embedding(c_content)
-                cursor.execute(f"UPDATE tb_docs_{active_domain} SET embedding = ? WHERE id = ?", (json.dumps(emb.tolist()), doc_id))
+                cursor.execute(f"UPDATE tb_docs_{domain_to_use} SET embedding = ? WHERE id = ?", (json.dumps(emb.tolist()), doc_id))
             else:
                 emb = np.array(json.loads(emb_str), dtype=np.float32)
                 
@@ -1424,7 +1424,7 @@ def generate_taxonomy():
             sampled_ids = [ids[idx] for idx in sampled_indices]
             
             placeholders = ','.join('?' * len(sampled_ids))
-            cursor.execute(f"SELECT content FROM tb_docs_{active_domain} WHERE id IN ({placeholders})", sampled_ids)
+            cursor.execute(f"SELECT content FROM tb_docs_{domain_to_use} WHERE id IN ({placeholders})", sampled_ids)
             sample_contents = [r[0] for r in cursor.fetchall()]
             
             try:

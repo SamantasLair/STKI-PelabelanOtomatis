@@ -21,3 +21,8 @@ _memory/system_error.log
 .DS_Store
 README.md
 PRESENTASI_SISTEM_STKI.md
+
+*.docx
+LAPORAN_AKHIR_STKI.md
+ETL_HAKI/
+ETL_Looker/

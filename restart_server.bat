@@ -10,7 +10,7 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5000" ^| findstr "LISTENING
 )
 
 echo [2/3] Memulai server Flask baru...
-start "" cmd /k "python TKI/app_web.py"
+start "" cmd /k "set PYTHONPATH=%cd%&& python -m TKI.app_web"
 
 echo [3/3] Menunggu server siap (ONNX dan Flask Booting)...
 :wait_loop

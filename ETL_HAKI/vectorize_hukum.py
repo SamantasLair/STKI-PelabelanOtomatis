@@ -107,7 +107,7 @@ def extract_content_from_json(data):
 
 def main():
     print("="*60)
-    print("🚀 MEMULAI TAHAP 2: VEKTORISASI DATA HUKUM (AI EMBEDDING) 🚀")
+    print("MEMULAI TAHAP 2: VEKTORISASI DATA HUKUM (AI EMBEDDING)")
     print("="*60)
     
     # 1. Mendapatkan daftar seluruh berkas JSON
@@ -177,7 +177,7 @@ def main():
     conn.close()
     
     print("\n" + "="*60)
-    print("✅ TAHAP 2 SELESAI ✅")
+    print("TAHAP 2 SELESAI")
     print(f"{total_files} dokumen hukum berhasil dikonversi ke vektor dan masuk ke tabel tb_docs_hukum di stki_master.db")
     print("="*60)
 
