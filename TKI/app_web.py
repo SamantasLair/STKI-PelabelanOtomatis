@@ -579,24 +579,20 @@ def get_documents():
 def get_status():
     global active_domain, MASTER_DB_PATH, TAXONOMY
     
-    # Buat DB jika belum ada
-    if not os.path.exists(MASTER_DB_PATH):
-        conn = DBConnection(MASTER_DB_PATH, timeout=15)
-        c = conn.cursor()
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                filename TEXT UNIQUE,
-                content TEXT,
-                labels TEXT,
-                embedding TEXT
-            )
-        ''')
-        conn.commit()
-        conn.close()
-        
     conn = DBConnection(MASTER_DB_PATH, timeout=15)
     c = conn.cursor()
+    # Pastikan tabel polimorfik dokumen terbuat jika belum ada
+    c.execute(f'''
+        CREATE TABLE IF NOT EXISTS tb_docs_{active_domain} (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filename TEXT UNIQUE,
+            content TEXT,
+            labels TEXT,
+            embedding TEXT
+        )
+    ''')
+    conn.commit()
+    
     c.execute(f"SELECT COUNT(*) FROM tb_docs_{active_domain}")
     total_docs = c.fetchone()[0]
     conn.close()
