@@ -3,6 +3,8 @@
 ## [TIER 1] JARAK DEKAT (FOKUS SAAT INI)
 - [x] BUAT_PANDUAN_PASAL_ID: Membuat dokumen operasional tim (`PANDUAN_INGEST_API_PASAL.md`).
 - [x] BUAT_PIPELINE_POSTGRES_MENTAH: Membuat skrip Python khusus (`ETL_HAKI/ingest_raw_postgres.py`) untuk menyimpan file unduhan API (`.json`) ke PostgreSQL secara utuh (*unprocessed JSONB*).
+- [x] PEMBERSIHAN_ROOT: Memindahkan semua file `.md`, `.py`, `.log`, dan dokumen sisa dari root direktori ke `_Dokumentasi`, `_Scripts`, dan `_Logs`.
+- [x] PENGHAPUSAN_GIT_TRACKING: Menghapus pelacakan Git (GitHub/HF Space) dari file-file internal tersebut via update `.gitignore` dan eksekusi `git rm -r --cached`.
 
 ## [TIER 2] PENTING (STRATEGI UTAMA)
 - [/] PROSES_DATA_HAKI: Unduh dan simpan data hukum dari REST API Pasal.id (Skrip ingest_pasal.py siap, menunggu eksekusi User).

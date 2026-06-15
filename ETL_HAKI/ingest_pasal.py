@@ -76,24 +76,39 @@ async def fetch_detail_and_save(session, frbr_uri, progress_bar):
     url = f"{BASE_URL}/laws{frbr_uri}"
     headers = {"Authorization": f"Bearer {TOKEN}"}
     
-    try:
-        async with session.get(url, headers=headers, timeout=15) as response:
-            if response.status == 200:
-                data = await response.json()
-                
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=4, ensure_ascii=False)
-            elif response.status == 429:
-                await asyncio.sleep(5)
-            else:
-                pass
-    except Exception as e:
-        pass
-    finally:
-        progress_bar.update(1)
-        await asyncio.sleep(1.05) 
-        
-    return True
+    max_retries = 10
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            async with session.get(url, headers=headers, timeout=15) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=4, ensure_ascii=False)
+                    
+                    progress_bar.update(1)
+                    await asyncio.sleep(1.05) # Menjaga limit 60/menit
+                    return True
+                    
+                elif response.status == 429:
+                    # Terkena Rate Limit (kemungkinan 360/jam)
+                    retry_count += 1
+                    print(f"\n[!] Terkena Rate Limit (429) pada {frbr_uri}. Menunggu 60 detik (Percobaan {retry_count}/{max_retries})...")
+                    await asyncio.sleep(60)
+                    continue # Coba lagi
+                else:
+                    print(f"\n[!] Gagal mengunduh {frbr_uri} - Status: {response.status}")
+                    progress_bar.update(1)
+                    return False
+        except Exception as e:
+            retry_count += 1
+            print(f"\n[!] Error jaringan pada {frbr_uri}: {e}. Menunggu 5 detik...")
+            await asyncio.sleep(5)
+            
+    progress_bar.update(1)
+    return False
 
 async def main():
     if not TOKEN:

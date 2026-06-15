@@ -209,9 +209,18 @@ const TaxonomyView = {
                 tagsHtml = `<span class="tag" style="color:var(--color-danger); border-color:var(--color-danger);">Tidak Terklasifikasi</span>`;
             }
             
+            // Ekstrak judul dari konten yang sudah diformat "=== JUDUL DOKUMEN ===\n[Judul]"
+            let docTitle = `ID: ${doc.id}`;
+            if (doc.content && doc.content.includes("=== JUDUL DOKUMEN ===")) {
+                const lines = doc.content.split('\n');
+                if (lines.length > 1) {
+                    docTitle = lines[1].trim();
+                }
+            }
+            
             html += `
             <div class="accordion-row" onclick="previewDocumentFiltered(${idx})" style="padding: 10px; border-bottom: 1px dashed var(--color-border); font-family: var(--font-mono); font-size: 0.8rem;">
-                <div style="font-weight:bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;">ID: ${doc.id}</div>
+                <div style="font-weight:bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;" title="${docTitle}">${docTitle}</div>
                 <div class="tag-list" style="margin-top:0;">${tagsHtml}</div>
             </div>
             `;
@@ -236,7 +245,7 @@ window.previewDocumentFiltered = function(idx) {
             <div style="font-weight: bold; border-bottom: 1px solid var(--color-ink); padding-bottom: 4px; margin-bottom: 8px;">DOKUMEN #${doc.id}</div>
             <div style="color: var(--color-ink-muted);">LABEL: <span style="color:var(--color-ink); font-weight:bold;">${tagsStr}</span></div>
         </div>
-        <div style="line-height: 1.6; font-size: 0.9rem;">
+        <div style="line-height: 1.6; font-size: 0.9rem; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;">
             ${doc.content}
         </div>
     `;

@@ -1633,6 +1633,42 @@ def batch_upload():
         log_error("Batch Upload", f"Kesalahan internal: {str(e)}", exc=True)
         return jsonify({"status": "error", "message": str(e)})
 
+@app.route("/api/pasal/sync_supabase", methods=["POST"])
+def sync_pasal_supabase():
+    try:
+        import threading
+        import subprocess
+        
+        def run_sync_pipeline():
+            log_error("Auto-Sync", "Memulai proses unduhan API Pasal.id di background...")
+            ingest_pasal_script = os.path.join(PROJECT_ROOT, "ETL_HAKI", "ingest_pasal.py")
+            ingest_pg_script = os.path.join(PROJECT_ROOT, "ETL_HAKI", "ingest_raw_postgres.py")
+            
+            # Step 1: Download
+            res1 = subprocess.run([sys.executable, ingest_pasal_script], capture_output=True, text=True)
+            if res1.returncode != 0:
+                log_error("Auto-Sync", f"Gagal pada tahap unduhan: {res1.stderr}")
+                return
+                
+            log_error("Auto-Sync", "Unduhan selesai. Memulai injeksi ke Supabase PostgreSQL...")
+            
+            # Step 2: Push to Postgres
+            res2 = subprocess.run([sys.executable, ingest_pg_script], capture_output=True, text=True)
+            if res2.returncode != 0:
+                log_error("Auto-Sync", f"Gagal pada tahap injeksi Supabase: {res2.stderr}")
+                return
+                
+            log_error("Auto-Sync", "Sinkronisasi ke Supabase PostgreSQL berhasil diselesaikan!")
+            
+        thread = threading.Thread(target=run_sync_pipeline)
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({"status": "success", "message": "Proses sinkronisasi telah berjalan di latar belakang (Background Thread)."})
+    except Exception as e:
+        log_error("Auto-Sync", f"Kesalahan internal: {str(e)}", exc=True)
+        return jsonify({"status": "error", "message": str(e)})
+
 if __name__ == "__main__":
     print("[INFO] Memulai server Flask pada http://127.0.0.1:5000")
     app.run(host="127.0.0.1", port=5000, debug=False)
