@@ -19,9 +19,15 @@ _doctrine/
 .agents/
 testing/
 _Quality_Assurance/
-_debug_read.py
-seed_output.log
 TKI/seed_alkitab.py
+
+# ==========================================
+# FOLDER INTERNAL (BARU)
+# ==========================================
+_Dokumentasi/
+_Scripts/
+_Logs/
+_databases/
 
 # ==========================================
 # FILE BERAT & SEMENTARA
@@ -42,13 +48,6 @@ STKI/onnx_model/*.bin
 # ==========================================
 # _memory harus tetap masuk ke Git sesuai instruksi.
 !_memory/
-
-# Penilaian Kriteria
-penilaian_kriteria.md
-
-# File Docs
-*.docx
-LAPORAN_AKHIR_STKI.md
 
 # ETL Pipelines
 ETL_HAKI/

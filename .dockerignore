@@ -20,9 +20,9 @@ _memory/system_error.log
 *.sqlite3
 .DS_Store
 README.md
-PRESENTASI_SISTEM_STKI.md
-
-*.docx
-LAPORAN_AKHIR_STKI.md
+_Dokumentasi/
+_Scripts/
+_Logs/
+_databases/
 ETL_HAKI/
 ETL_Looker/

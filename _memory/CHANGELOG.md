@@ -2,6 +2,11 @@
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 
+## [v4.9.6] - 2026-06-15
+### Added
+- **API Pasal.id Ingestion Pipeline**: Membuat skrip `ETL_HAKI/ingest_raw_postgres.py` untuk mengamankan data API Pasal.id secara utuh ke dalam PostgreSQL (`tb_raw_pasal`) sebagai *raw unprocessed document* berformat `JSONB`. 
+- **Dokumentasi Tim (PANDUAN_INGEST_API_PASAL)**: Membuat panduan operasional `PANDUAN_INGEST_API_PASAL.md` yang terintegrasi dengan struktur Graph M2M (`[[INDEX]]`) untuk membantu tim melakukan eksekusi unduhan dan pemindahan data API secara mandiri dan *idempotent*.
+
 ## [v4.9.5] - 2026-06-12
 ### Added
 - **Architecture Analysis Audit**: Membuat kajian komprehensif terkait 3 fungsi pilar sistem (Ingesti, Pencarian Hibrida, Klasifikasi Dinamis) lengkap dengan diagram Mermaid dan pembuktian formula LaTeX di `_Fondasi/analisis_arsitektur_3_fungsi_stki.md`. Kajian ini menjawab urgensi apakah sistem membutuhkan tambahan fungsi OCR, Cross-Encoder, atau eksekusi RAG.
