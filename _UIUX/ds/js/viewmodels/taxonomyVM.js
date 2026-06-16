@@ -186,6 +186,19 @@ const TaxonomyVM = {
                 sl2.value = taxonomy.threshold_l2;
                 vl2.textContent = parseFloat(taxonomy.threshold_l2).toFixed(2);
             }
+            
+            // Render Saved Metrics (Persistence state)
+            if (taxonomy.metrics) {
+                const mout = document.getElementById('metric-outliers');
+                const moutc = document.getElementById('metric-outliers-count');
+                if (mout) mout.textContent = `${taxonomy.metrics.outlier_pct}%`;
+                if (moutc) moutc.textContent = `${taxonomy.metrics.outliers} / ${taxonomy.metrics.total_docs} Docs`;
+                
+                const mov = document.getElementById('metric-overlaps');
+                const movc = document.getElementById('metric-overlaps-count');
+                if (mov) mov.textContent = `${taxonomy.metrics.overlap_pct}%`;
+                if (movc) movc.textContent = `${taxonomy.metrics.overlaps} / ${taxonomy.metrics.total_docs} Docs`;
+            }
         }
     },
 

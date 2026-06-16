@@ -106,7 +106,7 @@ def get_db_embedding(active_domain, doc_id, emb_str):
     return DB_EMBEDDING_CACHE[cache_key]
 
 def load_taxonomy(domain):
-    tax = {"Layer_1_Domain": [], "Layer_2_Detail": [], "threshold_l1": 0.50, "threshold_l2": 0.55}
+    tax = {"Layer_1_Domain": [], "Layer_2_Detail": [], "threshold_l1": 0.50, "threshold_l2": 0.55, "metrics": None}
     try:
         conn = DBConnection(MASTER_DB_PATH, timeout=15)
         c = conn.cursor()
@@ -124,6 +124,9 @@ def load_taxonomy(domain):
         for k, v in c.fetchall():
             if k in ["threshold_l1", "threshold_l2"]:
                 tax[k] = float(v)
+            elif k == "last_metrics":
+                try: tax["metrics"] = json.loads(v)
+                except: pass
         conn.close()
     except Exception as e:
         print(f"Error loading taxonomy DB: {e}")
@@ -136,12 +139,15 @@ def save_setting(db_path, key, value):
     try:
         conn = DBConnection(db_path, timeout=15)
         c = conn.cursor()
-        c.execute(f"CREATE TABLE IF NOT EXISTS tb_set_{domain} (key TEXT PRIMARY KEY, value TEXT)")
-        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+        c.execute(f"CREATE TABLE IF NOT EXISTS tb_set_{active_domain} (key TEXT PRIMARY KEY, value TEXT)")
+        c.execute(f"INSERT OR REPLACE INTO tb_set_{active_domain} (key, value) VALUES (?, ?)", (key, str(value)))
         conn.commit()
         conn.close()
         global TAXONOMY
-        TAXONOMY[key] = float(value)
+        try:
+            TAXONOMY[key] = float(value)
+        except:
+            TAXONOMY[key] = value
     except Exception as e:
         print(f"Error saving setting: {e}")
 
@@ -368,7 +374,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
                 l2_raw_sims.append(sim)
                 
             # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
-            stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
+            stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "domain", "adalah", "merupakan", "yaitu", "yakni", "tentang", "terkait", "hal", "pasal", "undang", "nomor", "tahun", "ayat", "huruf", "angka", "bahwa", "oleh", "karena", "sebab", "tersebut", "tidak", "bisa", "akan", "dapat", "menjadi"}
             for i, label in enumerate(tax_layer2):
                 text_words = set(text_lower.split())
                 label_words = set(label.lower().split())
@@ -415,7 +421,7 @@ def async_relabel_task(db_path, tax_layer1, tax_layer2):
             # Prediksi Layer 1 harus independen berdasar Dense Vector.
             
             # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
-            stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
+            stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "domain", "adalah", "merupakan", "yaitu", "yakni", "tentang", "terkait", "hal", "pasal", "undang", "nomor", "tahun", "ayat", "huruf", "angka", "bahwa", "oleh", "karena", "sebab", "tersebut", "tidak", "bisa", "akan", "dapat", "menjadi"}
             for i, label in enumerate(tax_layer1):
                 text_words = set(text_lower.split())
                 label_words = set(label.lower().split())
@@ -904,7 +910,7 @@ def recommend():
         from collections import Counter
         text_lower = query.lower()
         words = re.findall(r'\b[a-z]{3,}\b', text_lower)
-        stop_words_reco = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "adalah", "bahwa", "oleh", "karena", "tersebut", "tidak", "bisa", "akan", "dapat", "menjadi"}
+        stop_words_reco = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "domain", "adalah", "merupakan", "yaitu", "yakni", "tentang", "terkait", "hal", "pasal", "undang", "nomor", "tahun", "ayat", "huruf", "angka", "bahwa", "oleh", "karena", "sebab", "tersebut", "tidak", "bisa", "akan", "dapat", "menjadi", "sebagaimana", "jo", "peraturan", "keputusan", "ketetapan", "republik", "indonesia"}
         filtered_words = [w for w in words if w not in stop_words_reco]
         word_counts = Counter(filtered_words)
         query_words = [w for w, count in word_counts.most_common(20)]
@@ -950,7 +956,7 @@ def recommend():
             
             if lower_name.endswith('.csv') or lower_name.endswith('.xlsx'):
                 data_files.append(doc_obj)
-            elif lower_name.endswith('.pdf') or lower_name.endswith('.docx') or lower_name.endswith('.txt'):
+            else:
                 doc_files.append(doc_obj)
                 
         data_files = sorted(data_files, key=lambda x: x["similarity"], reverse=True)
@@ -983,7 +989,7 @@ def predict():
             l2_raw_sims.append(sim)
             
         # [FIXED] SOFT LEXICAL GATEKEEPER dengan Stop-Word/IDF Penalty
-        stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
+        stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "domain", "adalah", "merupakan", "yaitu", "yakni", "tentang", "terkait", "hal", "pasal", "undang", "nomor", "tahun", "ayat", "huruf", "angka", "bahwa", "oleh", "karena", "sebab", "tersebut", "tidak", "bisa", "akan", "dapat", "menjadi", "sebagaimana", "jo", "peraturan", "keputusan", "ketetapan", "republik", "indonesia"}
         for i, label in enumerate(TAXONOMY.get("Layer_2_Detail", [])):
             text_words = set(text_lower.split())
             label_words = set(label.lower().split())
@@ -1068,18 +1074,33 @@ def extract_text_from_file_object(file, filename):
         sample_text = " // ".join(row_samples)
         content = f"Dokumen spreadsheet tabel. Kolom: {cols}. Data: {sample_text}"
     elif ext == '.pdf':
-        import pypdf
-        import io
-        pdf_file = io.BytesIO(file.read())
-        reader = pypdf.PdfReader(pdf_file)
-        text_pages = []
-        for page in reader.pages:
-            t = page.extract_text()
-            if t:
-                text_pages.append(t)
-        content = "\n".join(text_pages)
+        content = ""
+        # 1. Coba menggunakan PyMuPDF (fitz) karena lebih superior untuk layout kompleks
+        try:
+            import fitz
+            file.seek(0)
+            doc = fitz.open(stream=file.read(), filetype="pdf")
+            text_pages = [page.get_text() for page in doc]
+            content = "\n".join(text_pages)
+        except:
+            pass
+            
+        # 2. Fallback menggunakan pypdf jika fitz gagal atau tidak menghasilkan teks
         if not content.strip():
-            content = f"Dokumen PDF {filename} (tidak dapat mengekstrak teks)."
+            try:
+                import pypdf
+                import io
+                file.seek(0)
+                pdf_file = io.BytesIO(file.read())
+                reader = pypdf.PdfReader(pdf_file)
+                text_pages = [page.extract_text() for page in reader.pages if page.extract_text()]
+                content = "\n".join(text_pages)
+            except:
+                pass
+                
+        # 3. Fallback terakhir jika dokumen memang tidak memiliki layer teks (misal: hasil scan OCR)
+        if not content.strip():
+            content = f"Dokumen PDF {filename} (Gagal mengekstrak teks. Dokumen kemungkinan besar berupa hasil scan gambar atau dilindungi enkripsi DR)."
     elif ext == '.docx':
         import docx
         import io
@@ -1113,7 +1134,7 @@ def ingest_file():
         
         # Prediksi Label (L1 & L2) sama seperti Endpoint /api/predict
         text_lower = content.lower()
-        stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta"}
+        stop_words = {"dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "domain", "adalah", "merupakan", "yaitu", "yakni", "tentang", "terkait", "hal", "pasal", "undang", "nomor", "tahun", "ayat", "huruf", "angka", "bahwa", "oleh", "karena", "sebab", "tersebut", "tidak", "bisa", "akan", "dapat", "menjadi"}
         
         # Predict L2
         l2_raw_sims = []
@@ -1425,7 +1446,7 @@ def generate_taxonomy():
             
             try:
                 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
-                indo_stop_words = ["dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "bahwa", "oleh", "karena", "sebab"]
+                indo_stop_words = ["dan", "atau", "di", "ke", "dari", "pada", "untuk", "dengan", "yang", "ini", "itu", "juga", "sebagai", "dalam", "serta", "domain", "adalah", "merupakan", "yaitu", "yakni", "tentang", "terkait", "hal", "pasal", "undang", "nomor", "tahun", "ayat", "huruf", "angka", "bahwa", "oleh", "karena", "sebab", "tersebut", "tidak", "bisa", "akan", "dapat", "menjadi", "sebagaimana", "jo", "peraturan", "keputusan", "ketetapan", "republik", "indonesia"]
                 custom_stop_words = list(ENGLISH_STOP_WORDS) + indo_stop_words
                 vectorizer = TfidfVectorizer(max_df=0.8, min_df=1, stop_words=custom_stop_words, token_pattern=r'(?u)\b[a-zA-Z][a-zA-Z]+\b')
                 tfidf_matrix = vectorizer.fit_transform(sample_contents)
@@ -1507,9 +1528,7 @@ def generate_taxonomy():
             # Outlier Fallback: Jika tidak menembus threshold apa pun
             if not assigned_labels:
                 outlier_count += 1
-                l2_cluster = cluster_l2_assignments[idx]
-                lbl_l2 = l2_cluster_to_label[l2_cluster]
-                assigned_labels.append(lbl_l2)
+                assigned_labels.append("Tidak Terklasifikasi")
             elif len(assigned_labels) > 1:
                 overlap_count += 1
                 
@@ -1535,6 +1554,8 @@ def generate_taxonomy():
             "overlaps": overlap_count,
             "overlap_pct": round((overlap_count / N) * 100, 1) if N > 0 else 0
         }
+        TAXONOMY["metrics"] = metrics
+        save_setting(MASTER_DB_PATH, "last_metrics", json.dumps(metrics))
         
         return jsonify({
             "status": "success",
@@ -1641,8 +1662,8 @@ def sync_pasal_supabase():
         
         def run_sync_pipeline():
             log_error("Auto-Sync", "Memulai proses unduhan API Pasal.id di background...")
-            ingest_pasal_script = os.path.join(PROJECT_ROOT, "ETL_HAKI", "ingest_pasal.py")
-            ingest_pg_script = os.path.join(PROJECT_ROOT, "ETL_HAKI", "ingest_raw_postgres.py")
+            ingest_pasal_script = os.path.join(PROJECT_ROOT, "ETL_PASAL", "ingest_pasal.py")
+            ingest_pg_script = os.path.join(PROJECT_ROOT, "ETL_PASAL", "ingest_raw_postgres.py")
             
             # Step 1: Download
             res1 = subprocess.run([sys.executable, ingest_pasal_script], capture_output=True, text=True)

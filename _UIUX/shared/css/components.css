@@ -156,6 +156,7 @@ input:focus, select:focus, textarea:focus {
 
 .col-main {
     flex: 1;
+    min-width: 0;
 }
 
 .col-score {
@@ -177,6 +178,7 @@ input:focus, select:focus, textarea:focus {
 
 .tag-list {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--spacing-xs);
     margin-top: var(--spacing-xs);
 }
@@ -636,4 +638,60 @@ input[type=range]::-moz-range-thumb:active {
     50% { transform: translateX(3px); }
     75% { transform: translateX(5px); }
     100% { transform: translateX(4px); }
+}
+
+/* =========================================
+   NEW: DEAL CARD ANIMATION (POKER STYLE)
+   ========================================= */
+@keyframes dealCard {
+    0% {
+        opacity: 0;
+        transform: translateY(60px) scale(0.8) rotate(-5deg);
+        box-shadow: 0 0 0 rgba(0,0,0,0);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1) rotate(0deg);
+    }
+}
+
+.deal-card-anim {
+    animation: dealCard 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    opacity: 0; /* Starts hidden */
+    flex-direction: column !important; /* Override ledger-row default */
+    background: var(--color-paper);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    margin-bottom: 8px;
+}
+
+.deal-card-anim:hover {
+    border-color: var(--color-ink);
+    box-shadow: 4px 4px 0px var(--color-ink);
+    transform: translateY(-2px);
+    z-index: 10;
+}
+
+.deal-card-anim .card-hidden-content {
+    display: none;
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    border-top: 1px dashed var(--color-border);
+    background: #faf9f6;
+    animation: fadeIn 0.3s ease-in;
+}
+
+.deal-card-anim.expanded {
+    border-color: var(--color-ink);
+    box-shadow: 4px 4px 0px var(--color-ink);
+}
+
+.deal-card-anim.expanded .card-hidden-content {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
 }

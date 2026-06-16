@@ -37,7 +37,12 @@ async def fetch_all_uris(session):
         
         async with session.get(url, headers=headers) as response:
             if response.status == 200:
-                data = await response.json()
+                try:
+                    data = await response.json(content_type=None)
+                except Exception as e:
+                    print(f"[!] Gagal membaca respons JSON. Server mengembalikan non-JSON. Error: {e}")
+                    print(f"[!] Respons mentah: {await response.text()}")
+                    break
                 
                 if total_expected is None:
                     total_expected = data.get("total", 0)
@@ -52,7 +57,8 @@ async def fetch_all_uris(session):
                 
                 offset += limit
                 
-                await asyncio.sleep(0.5)
+                # Mengunduh perlahan agar tidak memicu rate limit
+                await asyncio.sleep(1.5)
             else:
                 print(f"[!] Error saat mengambil indeks (Status: {response.status})")
                 print(await response.text())
@@ -83,20 +89,26 @@ async def fetch_detail_and_save(session, frbr_uri, progress_bar):
         try:
             async with session.get(url, headers=headers, timeout=15) as response:
                 if response.status == 200:
-                    data = await response.json()
+                    try:
+                        data = await response.json(content_type=None)
+                    except Exception as e:
+                        print(f"\n[!] Gagal membaca respons JSON pada {frbr_uri}. Error: {e}")
+                        progress_bar.update(1)
+                        return False
                     
                     with open(file_path, "w", encoding="utf-8") as f:
                         json.dump(data, f, indent=4, ensure_ascii=False)
                     
                     progress_bar.update(1)
-                    await asyncio.sleep(1.05) # Menjaga limit 60/menit
+                    # Mengunduh perlahan secara konstan agar tidak agresif dan tidak terblokir
+                    await asyncio.sleep(2.5) 
                     return True
                     
                 elif response.status == 429:
-                    # Terkena Rate Limit (kemungkinan 360/jam)
+                    # Terkena Rate Limit, istirahat sejenak
                     retry_count += 1
-                    print(f"\n[!] Terkena Rate Limit (429) pada {frbr_uri}. Menunggu 60 detik (Percobaan {retry_count}/{max_retries})...")
-                    await asyncio.sleep(60)
+                    print(f"\n[!] Terkena Rate Limit (429) pada {frbr_uri}. Menunggu 15 detik (Percobaan {retry_count}/{max_retries})...")
+                    await asyncio.sleep(15)
                     continue # Coba lagi
                 else:
                     print(f"\n[!] Gagal mengunduh {frbr_uri} - Status: {response.status}")
@@ -111,16 +123,23 @@ async def fetch_detail_and_save(session, frbr_uri, progress_bar):
     return False
 
 async def main():
-    if not TOKEN:
-        print("[FATAL] PASAL_API_TOKEN environment variable is missing.")
+    if not TOKEN or TOKEN == "your_token_here":
+        print("[FATAL] Variabel lingkungan PASAL_API_TOKEN tidak ditemukan atau belum diisi.")
+        env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        if not os.path.exists(env_path):
+            with open(env_path, "w") as f:
+                f.write("PASAL_API_TOKEN=your_token_here\n")
+            print(f"[!] File .env baru telah dibuat otomatis di:\n{env_path}")
+        print("[!] SILAKAN BUKA FILE .env DAN MASUKKAN TOKEN API PASAL.ID ANDA SEBELUM MELANJUTKAN.")
         return
 
     print("="*60)
-    print("🚀 MEMULAI PROSES INGESTI DATA - API PASAL.ID 🚀")
+    print("[SYSTEM] MEMULAI PROSES INGESTI DATA - API PASAL.ID")
     print("="*60)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
-    async with aiohttp.ClientSession() as session:
+    # Menonaktifkan verifikasi SSL untuk mencegah error CERTIFICATE_VERIFY_FAILED pada lingkungan Windows lokal
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
         # Fase 1: Dapatkan semua URI
         uris = await fetch_all_uris(session)
         
@@ -139,7 +158,7 @@ async def main():
                 await fetch_detail_and_save(session, uri, pbar)
 
     print("\n" + "="*60)
-    print("✅ PROSES INGESTI SELESAI ✅")
+    print("[SUCCESS] PROSES INGESTI SELESAI")
     print("Semua dokumen UU telah tersimpan di _RawData/hukum_pasal_id/.")
     print("="*60)
 

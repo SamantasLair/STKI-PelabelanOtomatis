@@ -50,5 +50,5 @@ STKI/onnx_model/*.bin
 !_memory/
 
 # ETL Pipelines
-ETL_HAKI/
-ETL_Looker/
+!ETL_PASAL/
+!ETL_Looker/

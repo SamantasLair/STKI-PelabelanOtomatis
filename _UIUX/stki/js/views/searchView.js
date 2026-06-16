@@ -36,21 +36,26 @@ const SearchView = {
             const displayTitle = doc.filename || (doc.content.includes(' - ') ? doc.content.split(' - ')[0] : 'ARSIP TAK BERNAMA');
             
             html += `
-                <div class="ledger-row">
-                    <div class="row-col col-rank">[${rank}]</div>
-                    <div class="row-col col-main">
-                        <div class="doc-title">${displayTitle}</div>
-                        <div class="doc-snippet">${doc.content.substring(0, 150)}...</div>
-                        <div class="tag-list">${tags}</div>
+                <div class="ledger-row deal-card-anim" style="animation-delay: ${idx * 0.08}s;" onclick="this.classList.toggle('expanded')">
+                    <div style="display:flex; width: 100%;">
+                        <div class="row-col col-rank">[${rank}]</div>
+                        <div class="row-col col-main">
+                            <div class="doc-title">${displayTitle}</div>
+                            <div class="doc-snippet">${doc.content.substring(0, 150)}...</div>
+                            <div class="tag-list">${tags}</div>
+                        </div>
+                        <div class="row-col col-score">
+                            <div>HYBRID: ${(doc.similarity).toFixed(2)}%</div>
+                            <div style="color: var(--color-ink-muted); font-size: 0.75rem;">
+                                DENSE: ${(doc.dense_score).toFixed(2)}% | SPARSE: ${(doc.sparse_score).toFixed(2)}%
+                            </div>
+                            <div class="telemetry-bar-container">
+                                <div class="telemetry-bar-fill" style="width: ${doc.similarity}%"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="row-col col-score">
-                        <div>HYBRID: ${(doc.similarity).toFixed(2)}%</div>
-                        <div style="color: var(--color-ink-muted); font-size: 0.75rem;">
-                            DENSE: ${(doc.dense_score).toFixed(2)}% | SPARSE: ${(doc.sparse_score).toFixed(2)}%
-                        </div>
-                        <div class="telemetry-bar-container">
-                            <div class="telemetry-bar-fill" style="width: ${doc.similarity}%"></div>
-                        </div>
+                    <div class="card-hidden-content" style="font-family: var(--font-mono); font-size: 0.85rem; color: #444; white-space: pre-wrap;">
+                        ${doc.content}
                     </div>
                 </div>
             `;

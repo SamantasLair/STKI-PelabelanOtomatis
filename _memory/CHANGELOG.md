@@ -2,6 +2,17 @@
 
 Semua perubahan teknis dan arsitektural yang signifikan harus dicatat di sini.
 
+## [v4.9.8] - 2026-06-16
+### Changed
+- **API Pasal.id Ingestion Rate Limit Adjustment**: Memodifikasi skrip `ETL_PASAL/ingest_pasal.py` untuk mengunduh dokumen secara konstan dan perlahan (2.5 detik per dokumen, ~24 req/menit) alih-alih melakukan *burst* yang memicu blokir limit server (*Rate Limit 429*). Durasi *sleep* blokir 429 juga diturunkan dari 60 detik menjadi 15 detik, memastikan proses penarikan data berjalan lambat namun stabil ("tidak agresif") tanpa *truncation* paksa.
+
+## [v4.9.7] - 2026-06-15
+- **Cross-Encoder Reranker Foundation**: Menambahkan fondasi arsitektural Reranker ke `_Fondasi/arsitektur_pemrosesan_stki.md` untuk meningkatkan presisi pasca-*Hybrid Search*.
+
+### Fixed
+- **UI Overflow on Tag List**: Memperbaiki masalah tata letak (bug visual) di mana jumlah tag taksonomi yang masif memecah batas komponen *Ledger Card* dan mendorong indikator skor persentase keluar dari layar. Ditangani dengan penerapan `min-width: 0` pada `.col-main` dan `flex-wrap: wrap` pada `.tag-list` di `components.css`.
+- **Silent JSON Filtering Bug (Recommendation Engine)**: Memperbaiki insiden *False Negative* "Nihil" pada tab Rekomendasi Terkait di mana dokumen berakhiran `.json` (termasuk kumpulan arsip Hukum/Pasal.id) diabaikan secara mutlak oleh logika peramban karena ekspektasi paksa hanya pada `.pdf/.docx/.csv/.xlsx`. Seluruh ekstensi non-tabel kini disahkan dan didorong ke ranah "Literatur".
+
 ## [v4.9.6] - 2026-06-15
 ### Added
 - **API Pasal.id Ingestion Pipeline**: Membuat skrip `ETL_HAKI/ingest_raw_postgres.py` untuk mengamankan data API Pasal.id secara utuh ke dalam PostgreSQL (`tb_raw_pasal`) sebagai *raw unprocessed document* berformat `JSONB`. 

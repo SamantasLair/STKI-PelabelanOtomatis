@@ -64,12 +64,12 @@
                         <button class="btn btn-primary" id="btn-search">EKSEKUSI PENCARIAN</button>
                     </div>
 
-                    <div class="ledger-box node-panel">
-                        <div class="ledger-header">
+                    <div class="ledger-box node-panel" style="display: flex; flex-direction: column; max-height: calc(100vh - 160px);">
+                        <div class="ledger-header" style="flex-shrink: 0;">
                             <span>HASIL PENCARIAN PANGKALAN DATA</span>
                             <span id="search-telemetry" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal; color: var(--color-ink-muted);"></span>
                         </div>
-                        <div class="ledger-body" id="search-results">
+                        <div class="ledger-body" id="search-results" style="overflow-y: auto; flex-grow: 1;">
                             <div class="empty-state">MASUKKAN KUERI UNTUK MEMULAI PENARIKAN DATA</div>
                         </div>
                     </div>
@@ -116,21 +116,21 @@
                     </div>
 
                     <div class="grid-2">
-                        <div class="ledger-box node-panel">
-                            <div class="ledger-header">
+                        <div class="ledger-box node-panel" style="display: flex; flex-direction: column; max-height: calc(100vh - 280px);">
+                            <div class="ledger-header" style="flex-shrink: 0;">
                                 <span>DATASET (.CSV/.XLSX)</span>
                                 <span id="reco-data-count" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">0 DITEMUKAN</span>
                             </div>
-                            <div class="ledger-body" id="reco-data-results">
+                            <div class="ledger-body" id="reco-data-results" style="overflow-y: auto; overflow-x: hidden; flex-grow: 1;">
                                 <div class="empty-state">MENUNGGU KUERI...</div>
                             </div>
                         </div>
-                        <div class="ledger-box node-panel">
-                            <div class="ledger-header">
+                        <div class="ledger-box node-panel" style="display: flex; flex-direction: column; max-height: calc(100vh - 280px);">
+                            <div class="ledger-header" style="flex-shrink: 0;">
                                 <span>LITERATUR (.PDF/.DOCX)</span>
                                 <span id="reco-docs-count" style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: normal;">0 DITEMUKAN</span>
                             </div>
-                            <div class="ledger-body" id="reco-docs-results">
+                            <div class="ledger-body" id="reco-docs-results" style="overflow-y: auto; overflow-x: hidden; flex-grow: 1;">
                                 <div class="empty-state">MENUNGGU KUERI...</div>
                             </div>
                         </div>
